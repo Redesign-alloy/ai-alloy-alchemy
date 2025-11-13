@@ -37,6 +37,23 @@ export const ResultsDisplay = ({ result, isLoading }: ResultsDisplayProps) => {
     );
   }
 
+  // Defensive check for required data
+  if (!result.redesigned_alloy || !result.analysis_summary) {
+    return (
+      <Card className="shadow-lg border-border/50 flex items-center justify-center min-h-[600px]">
+        <div className="text-center space-y-2 p-8">
+          <div className="w-16 h-16 rounded-full bg-destructive/10 mx-auto flex items-center justify-center">
+            <CheckCircle2 className="w-8 h-8 text-destructive" />
+          </div>
+          <h3 className="text-xl font-semibold text-destructive">Invalid Response</h3>
+          <p className="text-muted-foreground max-w-sm">
+            The API returned an unexpected response format. Please try again or check your webhook configuration.
+          </p>
+        </div>
+      </Card>
+    );
+  }
+
   const { redesigned_alloy, analysis_summary } = result;
 
   return (
