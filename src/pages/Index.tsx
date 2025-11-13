@@ -1,11 +1,64 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useState } from "react";
+import { AlloyForm } from "@/components/AlloyForm";
+import { ResultsDisplay } from "@/components/ResultsDisplay";
+import { ExampleSelector } from "@/components/ExampleSelector";
+import { Atom } from "lucide-react";
+import { AlloyData, AlloyResult } from "@/types/alloy";
 
 const Index = () => {
+  const [result, setResult] = useState<AlloyResult | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleSubmit = async (data: AlloyData) => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(
+        "https://lefasif598.app.n8n.cloud/webhook-test/1f19fb01-07b0-4178-8206-c87e56a355a1",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(data),
+        }
+      );
+
+      const resultData = await response.json();
+      setResult(resultData);
+    } catch (error) {
+      console.error("Error submitting alloy data:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-secondary">
+      <div className="container mx-auto px-4 py-8 max-w-7xl">
+        {/* Header */}
+        <header className="text-center mb-12">
+          <div className="flex items-center justify-center gap-3 mb-4">
+            <div className="p-3 bg-primary rounded-xl shadow-lg">
+              <Atom className="w-8 h-8 text-primary-foreground" />
+            </div>
+            <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+              AI Alloy Redesigner
+            </h1>
+          </div>
+          <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
+            Advanced metallurgical engineering powered by artificial intelligence. 
+            Optimize steel alloy compositions for enhanced performance and sustainability.
+          </p>
+        </header>
+
+        {/* Example Selector */}
+        <ExampleSelector />
+
+        {/* Main Content */}
+        <div className="grid lg:grid-cols-2 gap-8 mt-8">
+          <AlloyForm onSubmit={handleSubmit} isLoading={isLoading} />
+          <ResultsDisplay result={result} isLoading={isLoading} />
+        </div>
       </div>
     </div>
   );
