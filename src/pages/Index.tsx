@@ -4,13 +4,16 @@ import { ResultsDisplay } from "@/components/ResultsDisplay";
 import { ExampleSelector } from "@/components/ExampleSelector";
 import { Atom } from "lucide-react";
 import { AlloyData, AlloyResult } from "@/types/alloy";
+import { useToast } from "@/hooks/use-toast";
 
 const Index = () => {
+  const { toast } = useToast();
   const [result, setResult] = useState<AlloyResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (data: AlloyData) => {
     setIsLoading(true);
+    setResult(null); // Clear previous results
     try {
       const response = await fetch(
         "https://lefasif598.app.n8n.cloud/webhook-test/1f19fb01-07b0-4178-8206-c87e56a355a1",
@@ -23,10 +26,28 @@ const Index = () => {
         }
       );
 
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: "Unknown error" }));
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      }
+
       const resultData = await response.json();
+      
+      // Validate that we have the expected result structure
+      if (!resultData.redesigned_alloy) {
+        throw new Error("Invalid response format from API");
+      }
+      
       setResult(resultData);
     } catch (error) {
       console.error("Error submitting alloy data:", error);
+      // Show error toast to user
+      const errorMessage = error instanceof Error ? error.message : "Failed to connect to API";
+      toast({
+        title: "Analysis Failed",
+        description: errorMessage,
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
