@@ -33,11 +33,7 @@ const Index = () => {
 
       const resultData = await response.json();
       
-      // Validate that we have the expected result structure
-      if (!resultData.redesigned_alloy) {
-        throw new Error("Invalid response format from API");
-      }
-      
+      // Accept any response format from webhook
       setResult(resultData);
     } catch (error) {
       console.error("Error submitting alloy data:", error);
