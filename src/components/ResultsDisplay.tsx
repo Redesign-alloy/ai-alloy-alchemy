@@ -54,24 +54,36 @@ export const ResultsDisplay = ({ result, isLoading }: ResultsDisplayProps) => {
     );
   }
 
-  // Defensive check for required data
-  if (!result.redesigned_alloy || !result.analysis_summary) {
+  // Try to extract data from different response formats
+  let redesigned_alloy = result.redesigned_alloy;
+  let analysis_summary = result.analysis_summary;
+  
+  // Handle array responses with final_output
+  if (Array.isArray(result) && result[0]?.final_output) {
+    redesigned_alloy = result[0].final_output.redesigned_alloy;
+    analysis_summary = result[0].final_output.analysis_summary;
+  }
+  
+  // Show raw webhook response if no structured data
+  if (!redesigned_alloy) {
     return (
-      <Card className="shadow-lg border-border/50 flex items-center justify-center min-h-[600px]">
-        <div className="text-center space-y-2 p-8">
-          <div className="w-16 h-16 rounded-full bg-destructive/10 mx-auto flex items-center justify-center">
-            <CheckCircle2 className="w-8 h-8 text-destructive" />
+      <Card className="shadow-lg border-border/50">
+        <CardHeader className="bg-gradient-to-r from-success/5 to-accent/5 border-b">
+          <CardTitle className="flex items-center gap-2">
+            <CheckCircle2 className="w-5 h-5 text-success" />
+            Webhook Response
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pt-6">
+          <div className="bg-muted/30 rounded-lg p-4 overflow-auto max-h-[600px]">
+            <pre className="text-xs font-mono text-foreground whitespace-pre-wrap">
+              {JSON.stringify(result, null, 2)}
+            </pre>
           </div>
-          <h3 className="text-xl font-semibold text-destructive">Invalid Response</h3>
-          <p className="text-muted-foreground max-w-sm">
-            The API returned an unexpected response format. Please try again or check your webhook configuration.
-          </p>
-        </div>
+        </CardContent>
       </Card>
     );
   }
-
-  const { redesigned_alloy, analysis_summary } = result;
 
   return (
     <Card className="shadow-lg border-border/50">
@@ -85,9 +97,11 @@ export const ResultsDisplay = ({ result, isLoading }: ResultsDisplayProps) => {
         {/* Alloy Name */}
         <div>
           <h3 className="text-2xl font-bold text-primary">{redesigned_alloy.name}</h3>
-          <Badge variant="secondary" className="mt-2">
-            Status: {result.status}
-          </Badge>
+          {result.status && (
+            <Badge variant="secondary" className="mt-2">
+              Status: {result.status}
+            </Badge>
+          )}
         </div>
 
         <Separator />
@@ -138,23 +152,27 @@ export const ResultsDisplay = ({ result, isLoading }: ResultsDisplayProps) => {
               <span className="text-sm text-muted-foreground">Cost per Kg</span>
             </div>
             <div className="text-2xl font-bold">₹{redesigned_alloy.estimated_cost_per_kg}</div>
-            <Badge variant="outline" className="mt-2">
-              {analysis_summary.cost_change_percent > 0 ? "+" : ""}
-              {analysis_summary.cost_change_percent}%
-            </Badge>
+            {analysis_summary?.cost_change_percent !== undefined && (
+              <Badge variant="outline" className="mt-2">
+                {analysis_summary.cost_change_percent > 0 ? "+" : ""}
+                {analysis_summary.cost_change_percent}%
+              </Badge>
+            )}
           </div>
-          <div className="bg-card border rounded-lg p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <TrendingUp className="w-4 h-4 text-success" />
-              <span className="text-sm text-muted-foreground">Performance</span>
+          {analysis_summary?.performance_gain_percent !== undefined && (
+            <div className="bg-card border rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <TrendingUp className="w-4 h-4 text-success" />
+                <span className="text-sm text-muted-foreground">Performance</span>
+              </div>
+              <div className="text-2xl font-bold">
+                +{analysis_summary.performance_gain_percent}%
+              </div>
+              <Badge variant="outline" className="mt-2 border-success text-success">
+                Improved
+              </Badge>
             </div>
-            <div className="text-2xl font-bold">
-              +{analysis_summary.performance_gain_percent}%
-            </div>
-            <Badge variant="outline" className="mt-2 border-success text-success">
-              Improved
-            </Badge>
-          </div>
+          )}
           <div className="bg-card border rounded-lg p-4">
             <div className="flex items-center gap-2 mb-2">
               <Leaf className="w-4 h-4 text-success" />
@@ -176,7 +194,7 @@ export const ResultsDisplay = ({ result, isLoading }: ResultsDisplayProps) => {
         </div>
 
         {/* Analysis Summary */}
-        {analysis_summary.remarks && (
+        {analysis_summary?.remarks && (
           <>
             <Separator />
             <div>
