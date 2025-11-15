@@ -2,7 +2,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { AlloyResult } from "@/types/alloy";
-import { CheckCircle2, TrendingUp, DollarSign, Leaf, Loader2 } from "lucide-react";
+import { CheckCircle2, TrendingUp, IndianRupee, Leaf, Loader2, Clock } from "lucide-react";
+import { useEffect, useState } from "react";
 
 interface ResultsDisplayProps {
   result: AlloyResult | null;
@@ -10,12 +11,28 @@ interface ResultsDisplayProps {
 }
 
 export const ResultsDisplay = ({ result, isLoading }: ResultsDisplayProps) => {
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  useEffect(() => {
+    if (isLoading) {
+      setElapsedSeconds(0);
+      const interval = setInterval(() => {
+        setElapsedSeconds((prev) => prev + 1);
+      }, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [isLoading]);
+
   if (isLoading) {
     return (
       <Card className="shadow-lg border-border/50 flex items-center justify-center min-h-[600px]">
         <div className="text-center space-y-4">
           <Loader2 className="w-12 h-12 text-primary animate-spin mx-auto" />
           <p className="text-muted-foreground">Analyzing alloy composition...</p>
+          <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+            <Clock className="w-4 h-4" />
+            <span>{elapsedSeconds}s elapsed</span>
+          </div>
         </div>
       </Card>
     );
@@ -117,10 +134,10 @@ export const ResultsDisplay = ({ result, isLoading }: ResultsDisplayProps) => {
         <div className="grid grid-cols-2 gap-4">
           <div className="bg-card border rounded-lg p-4">
             <div className="flex items-center gap-2 mb-2">
-              <DollarSign className="w-4 h-4 text-primary" />
-              <span className="text-sm text-muted-foreground">Cost per kg</span>
+              <IndianRupee className="w-4 h-4 text-primary" />
+              <span className="text-sm text-muted-foreground">Cost per Kg</span>
             </div>
-            <div className="text-2xl font-bold">${redesigned_alloy.estimated_cost_per_kg}</div>
+            <div className="text-2xl font-bold">₹{redesigned_alloy.estimated_cost_per_kg}</div>
             <Badge variant="outline" className="mt-2">
               {analysis_summary.cost_change_percent > 0 ? "+" : ""}
               {analysis_summary.cost_change_percent}%
@@ -170,6 +187,17 @@ export const ResultsDisplay = ({ result, isLoading }: ResultsDisplayProps) => {
             </div>
           </>
         )}
+
+        {/* Raw JSON Response */}
+        <Separator />
+        <div>
+          <h4 className="font-semibold mb-3 text-steel-dark">Raw API Response</h4>
+          <div className="bg-muted/30 rounded-lg p-4 overflow-auto max-h-96">
+            <pre className="text-xs font-mono text-foreground">
+              {JSON.stringify(result, null, 2)}
+            </pre>
+          </div>
+        </div>
       </CardContent>
     </Card>
   );
