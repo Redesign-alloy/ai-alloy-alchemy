@@ -16,7 +16,7 @@ const Index = () => {
     setResult(null); // Clear previous results
     try {
       const response = await fetch(
-        "https://tejanaidu.app.n8n.cloud/webhook/redesign-alloy ",
+        "https://tejanaidu.app.n8n.cloud/webhook/redesign-alloy",
         {
           method: "POST",
           headers: {
