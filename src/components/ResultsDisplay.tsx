@@ -23,52 +23,61 @@ export const ResultsDisplay = ({ result, isLoading }: ResultsDisplayProps) => {
 
   if (isLoading) {
     return (
-      <div className="bg-card rounded-lg border border-border shadow-sm flex items-center justify-center min-h-[600px]">
-        <div className="text-center space-y-4">
-          <Loader2 className="w-12 h-12 text-primary animate-spin mx-auto" />
-          <p className="text-muted-foreground">Analyzing alloy composition...</p>
-          <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-            <Clock className="w-4 h-4" />
-            <span>{elapsedSeconds}s elapsed</span>
+      <Card className="shadow-lg border-border/50">
+        <CardContent className="flex items-center justify-center min-h-[600px]">
+          <div className="text-center space-y-4">
+            <Loader2 className="w-12 h-12 text-primary animate-spin mx-auto" />
+            <p className="text-muted-foreground">Analyzing alloy composition...</p>
+            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+              <Clock className="w-4 h-4" />
+              <span>{elapsedSeconds}s elapsed</span>
+            </div>
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     );
   }
 
   if (!result) {
     return (
-      <div className="bg-card rounded-lg border border-border shadow-sm flex items-center justify-center min-h-[600px]">
-        <div className="text-center space-y-2 p-8">
-          <div className="w-16 h-16 rounded-full bg-muted mx-auto flex items-center justify-center">
-            <CheckCircle2 className="w-8 h-8 text-muted-foreground" />
+      <Card className="shadow-lg border-border/50">
+        <CardContent className="flex items-center justify-center min-h-[600px]">
+          <div className="text-center space-y-2 p-8">
+            <div className="w-16 h-16 rounded-full bg-muted mx-auto flex items-center justify-center">
+              <CheckCircle2 className="w-8 h-8 text-muted-foreground" />
+            </div>
+            <h3 className="text-xl font-semibold text-foreground">Ready to Analyze</h3>
+            <p className="text-muted-foreground max-w-sm">
+              Enter your alloy specifications and click "Redesign Alloy" to see optimized results
+            </p>
           </div>
-          <h3 className="text-xl font-semibold text-foreground">Ready to Analyze</h3>
-          <p className="text-muted-foreground max-w-sm">
-            Enter your alloy specifications and click "Redesign Alloy" to see optimized results
-          </p>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     );
   }
 
-  // Try to extract data from different response formats
-  let redesigned_alloy = result.redesigned_alloy;
-  let analysis_summary = result.analysis_summary;
+  // Extract data from nested webhook response
+  let finalOutput: any = null;
   
-  // Handle array responses with final_output
-  if (Array.isArray(result) && result[0]?.final_output) {
-    redesigned_alloy = result[0].final_output.redesigned_alloy;
-    analysis_summary = result[0].final_output.analysis_summary;
+  // Handle different response structures
+  if (result.value && Array.isArray(result.value) && result.value[0]?.final_output) {
+    finalOutput = result.value[0].final_output;
+  } else if (result.final_output) {
+    finalOutput = result.final_output;
+  } else if (result.redesigned_alloy) {
+    // Direct structure
+    finalOutput = {
+      redesigned_alloy: result.redesigned_alloy,
+      analysis_summary: result.analysis_summary
+    };
   }
   
-  // Show raw webhook response if no structured data
-  if (!redesigned_alloy) {
+  if (!finalOutput || !finalOutput.redesigned_alloy) {
     return (
-      <Card className="shadow-sm">
+      <Card className="shadow-lg border-border/50">
         <CardHeader className="bg-gradient-to-r from-primary/5 to-accent/5 border-b">
           <CardTitle className="flex items-center gap-2">
-            <CheckCircle2 className="w-5 h-5 text-success" />
+            <CheckCircle2 className="w-5 h-5 text-primary" />
             Webhook Response
           </CardTitle>
         </CardHeader>
@@ -83,174 +92,139 @@ export const ResultsDisplay = ({ result, isLoading }: ResultsDisplayProps) => {
     );
   }
 
-  // Extract desired improvements from result
-  const desiredImprovements = result.desired_improvements || [];
+  const redesignedAlloy = finalOutput.redesigned_alloy;
+  const analysisSummary = finalOutput.analysis_summary;
+  
+  // Parse new_composition if it's a stringified JSON
+  let parsedComposition: Record<string, number> = {};
+  try {
+    if (typeof redesignedAlloy.new_composition === 'string') {
+      parsedComposition = JSON.parse(redesignedAlloy.new_composition);
+    } else {
+      parsedComposition = redesignedAlloy.new_composition;
+    }
+  } catch (e) {
+    console.error('Failed to parse composition:', e);
+    parsedComposition = redesignedAlloy.new_composition || {};
+  }
 
   return (
-    <div className="space-y-6">
-      {/* Alloy Header Card */}
-      <div className="bg-gradient-to-r from-primary/10 to-accent/10 rounded-lg border border-border px-6 py-5">
-        <span className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Redesigned Alloy:</span>
-        <h2 className="text-3xl font-bold text-steel-dark dark:text-primary mt-2">{redesigned_alloy.name}</h2>
-      </div>
-
-      {/* New Composition */}
-      <Card className="shadow-sm">
-        <CardHeader className="bg-gradient-to-r from-primary/5 to-accent/5 border-b">
-          <CardTitle className="text-lg">New Composition (%)</CardTitle>
-        </CardHeader>
-        <CardContent className="pt-6">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-foreground">Element</th>
-                  <th className="text-right py-3 px-4 text-sm font-semibold text-foreground">Percentage</th>
-                </tr>
-              </thead>
-              <tbody>
-                {Object.entries(redesigned_alloy.new_composition).map(([element, value], index) => (
-                  <tr 
-                    key={element}
-                    className={index % 2 === 0 ? "bg-secondary/30" : "bg-card"}
-                  >
-                    <td className="py-3 px-4 text-sm font-medium text-foreground">{element}</td>
-                    <td className="py-3 px-4 text-sm text-right text-muted-foreground">
-                      {typeof value === 'number' ? value.toFixed(2) : value}%
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Dynamic Improvement Results */}
-      {Array.isArray(desiredImprovements) && desiredImprovements.length > 0 && (
-        <div className="space-y-4">
-          <h3 className="text-xl font-semibold text-foreground">Improvement Results</h3>
-          <div className="grid gap-4">
-            {desiredImprovements.map((improvement: any, index: number) => {
-              const propertyKey = improvement.property || improvement.id;
-              const propertyValue = redesigned_alloy.predicted_properties[propertyKey.toLowerCase().replace(/ /g, '_')] || 
-                                    redesigned_alloy.predicted_properties[propertyKey] ||
-                                    improvement.value;
-              
-              return (
-                <Card key={index} className="shadow-sm">
-                  <CardHeader className="bg-gradient-to-r from-primary/5 to-accent/5 border-b">
-                    <CardTitle className="flex items-center gap-2 text-lg">
-                      <TrendingUp className="w-5 h-5 text-primary" />
-                      {improvement.property || `Improvement ${index + 1}`}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="pt-6">
-                    <div className="space-y-4">
-                      <div className="flex justify-between items-center p-4 bg-secondary/30 rounded-lg">
-                        <span className="text-sm font-medium text-muted-foreground">Target Value:</span>
-                        <span className="text-sm font-semibold text-foreground">{improvement.value}</span>
-                      </div>
-                      <div className="flex justify-between items-center p-4 bg-primary/5 rounded-lg border border-primary/20">
-                        <span className="text-sm font-medium text-muted-foreground">Achieved Value:</span>
-                        <span className="text-sm font-semibold text-primary">{propertyValue}</span>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
+    <Card className="shadow-lg border-border/50">
+      <CardHeader className="bg-gradient-to-r from-primary/5 to-accent/5 border-b">
+        <CardTitle className="flex items-center gap-2">
+          <CheckCircle2 className="w-5 h-5 text-primary" />
+          Redesign Results
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="pt-6 space-y-6">
+        {/* Main Header - Alloy Name */}
+        <div className="bg-gradient-to-r from-primary/10 to-accent/10 rounded-lg border border-border px-6 py-5">
+          <span className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Redesigned Alloy:</span>
+          <h2 className="text-3xl font-bold text-primary mt-2">{redesignedAlloy.name}</h2>
         </div>
-      )}
 
-      {/* Predicted Properties */}
-      <Card className="shadow-sm">
-        <CardHeader className="bg-gradient-to-r from-primary/5 to-accent/5 border-b">
-          <CardTitle className="text-lg">Predicted Properties</CardTitle>
-        </CardHeader>
-        <CardContent className="pt-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {Object.entries(redesigned_alloy.predicted_properties).map(([key, value]) => (
-              <div key={key} className="flex justify-between items-center p-4 bg-secondary/30 rounded-lg">
-                <span className="text-sm font-medium text-muted-foreground capitalize">
-                  {key.replace(/_/g, " ")}:
-                </span>
-                <span className="text-sm font-semibold text-foreground">{value}</span>
+        {/* New Composition Section */}
+        <div>
+          <h3 className="text-lg font-semibold text-foreground mb-3">New Composition (%)</h3>
+          <div className="space-y-2">
+            {Object.entries(parsedComposition).map(([element, value]) => (
+              <div key={element} className="flex gap-2 items-center">
+                <div className="w-1/3 px-3 py-2 bg-secondary/30 rounded-md border border-border">
+                  <span className="text-sm font-medium text-foreground">{element}</span>
+                </div>
+                <div className="flex-1 px-3 py-2 bg-secondary/30 rounded-md border border-border">
+                  <span className="text-sm text-muted-foreground">
+                    {typeof value === 'number' ? value.toFixed(2) : value}%
+                  </span>
+                </div>
               </div>
             ))}
           </div>
-        </CardContent>
-      </Card>
+        </div>
 
-      {/* Metric Widgets */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card className="shadow-sm bg-gradient-to-br from-success/10 to-success/5 border-success/20">
-          <CardContent className="pt-6 text-center">
-            <div className="text-4xl font-bold text-success mb-2">
-              {(redesigned_alloy.probability_of_success * 100).toFixed(0)}%
-            </div>
-            <div className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-              Probability of Success
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="shadow-sm bg-gradient-to-br from-accent/10 to-accent/5 border-accent/20">
-          <CardContent className="pt-6 text-center">
-            <div className="text-4xl font-bold text-accent mb-2">
-              {redesigned_alloy.sustainability_score.toFixed(2)} / 1.0
-            </div>
-            <div className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-              Sustainability Score
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+        {/* Predicted Properties - 2 Column Grid */}
+        <div>
+          <h3 className="text-lg font-semibold text-foreground mb-3">Predicted Properties</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {Object.entries(redesignedAlloy.predicted_properties || {}).map(([key, value]) => (
+              <div key={key} className="bg-gradient-to-br from-secondary/40 to-secondary/20 rounded-lg border border-border p-4">
+                <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
+                  {key.replace(/_/g, " ")}
+                </div>
+                <div className="text-2xl font-bold text-foreground">{value}</div>
+              </div>
+            ))}
+          </div>
+        </div>
 
-      {/* Cost Metric */}
-      <Card className="shadow-sm">
-        <CardContent className="pt-6">
-          <div className="flex justify-between items-center">
-            <div>
-              <span className="text-sm font-medium text-muted-foreground">Estimated Cost per Kg</span>
-              <div className="text-3xl font-bold text-primary mt-1">₹{redesigned_alloy.estimated_cost_per_kg}</div>
+        {/* Analysis Summary - Performance & Cost Badges */}
+        {analysisSummary && (
+          <div>
+            <h3 className="text-lg font-semibold text-foreground mb-3">Analysis Summary</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              {analysisSummary.performance_gain_percent !== undefined && (
+                <div className="bg-gradient-to-br from-success/20 to-success/10 rounded-lg border border-success/30 p-4 text-center">
+                  <div className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-1">
+                    Performance Gain
+                  </div>
+                  <div className="text-3xl font-bold text-success">
+                    +{analysisSummary.performance_gain_percent}%
+                  </div>
+                </div>
+              )}
+              {analysisSummary.cost_change_percent !== undefined && (
+                <div className={`rounded-lg border p-4 text-center ${
+                  analysisSummary.cost_change_percent > 0 
+                    ? 'bg-gradient-to-br from-destructive/20 to-destructive/10 border-destructive/30' 
+                    : 'bg-gradient-to-br from-success/20 to-success/10 border-success/30'
+                }`}>
+                  <div className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-1">
+                    Cost Change
+                  </div>
+                  <div className={`text-3xl font-bold ${
+                    analysisSummary.cost_change_percent > 0 ? 'text-destructive' : 'text-success'
+                  }`}>
+                    {analysisSummary.cost_change_percent > 0 ? '+' : ''}{analysisSummary.cost_change_percent}%
+                  </div>
+                </div>
+              )}
             </div>
-            {analysis_summary?.cost_change_percent !== undefined && (
-              <div className={`text-2xl font-semibold ${analysis_summary.cost_change_percent > 0 ? 'text-destructive' : 'text-success'}`}>
-                {analysis_summary.cost_change_percent > 0 ? '+' : ''}{analysis_summary.cost_change_percent}%
+
+            {/* Remarks Section */}
+            {analysisSummary.remarks && (
+              <div className="bg-muted/30 rounded-lg border border-border p-4">
+                <p className="text-sm text-foreground leading-relaxed">{analysisSummary.remarks}</p>
               </div>
             )}
           </div>
-        </CardContent>
-      </Card>
+        )}
 
-      {/* Analysis Summary */}
-      {analysis_summary?.remarks && (
-        <Card className="shadow-sm">
-          <CardHeader className="bg-gradient-to-r from-primary/5 to-accent/5 border-b">
-            <CardTitle className="text-lg">Metallurgical Analysis Summary</CardTitle>
-          </CardHeader>
-          <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              {analysis_summary.remarks}
-            </p>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Raw JSON Response */}
-      <Card className="shadow-sm">
-        <CardHeader className="bg-gradient-to-r from-primary/5 to-accent/5 border-b">
-          <CardTitle className="text-lg">Raw API Response</CardTitle>
-        </CardHeader>
-        <CardContent className="pt-6">
-          <div className="bg-muted/30 rounded-lg p-4 overflow-auto max-h-96">
-            <pre className="text-xs font-mono text-foreground">
-              {JSON.stringify(result, null, 2)}
-            </pre>
+        {/* Additional Metrics */}
+        {(redesignedAlloy.probability_of_success !== undefined || redesignedAlloy.sustainability_score !== undefined) && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {redesignedAlloy.probability_of_success !== undefined && (
+              <div className="bg-gradient-to-br from-primary/10 to-primary/5 rounded-lg border border-primary/20 p-4 text-center">
+                <div className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-1">
+                  Probability of Success
+                </div>
+                <div className="text-3xl font-bold text-primary">
+                  {(redesignedAlloy.probability_of_success * 100).toFixed(0)}%
+                </div>
+              </div>
+            )}
+            {redesignedAlloy.sustainability_score !== undefined && (
+              <div className="bg-gradient-to-br from-accent/10 to-accent/5 rounded-lg border border-accent/20 p-4 text-center">
+                <div className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-1">
+                  Sustainability Score
+                </div>
+                <div className="text-3xl font-bold text-accent">
+                  {redesignedAlloy.sustainability_score.toFixed(2)} / 1.0
+                </div>
+              </div>
+            )}
           </div>
-        </CardContent>
-      </Card>
-    </div>
+        )}
+      </CardContent>
+    </Card>
   );
 };
