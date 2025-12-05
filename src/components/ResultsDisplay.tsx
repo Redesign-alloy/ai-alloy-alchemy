@@ -1,5 +1,5 @@
 import { AlloyResult } from "@/types/alloy";
-import { CheckCircle2, Loader2, Clock, TrendingUp } from "lucide-react";
+import { CheckCircle2, Loader2, Clock, TrendingUp, Flame, Droplets, Thermometer, Timer } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -296,6 +296,133 @@ export const ResultsDisplay = ({ result, isLoading }: ResultsDisplayProps) => {
                 <p className="text-sm text-foreground leading-relaxed">
                   {analysis_summary.remarks}
                 </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Section 6: Proposed Heat Treatment Cycle */}
+      {redesigned_alloy.heat_treatment_cycle && (
+        <Card className="shadow-lg border-border/50">
+          <CardHeader className="bg-gradient-to-r from-orange-500/10 to-red-500/10 border-b">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Flame className="w-5 h-5 text-orange-500" />
+              Proposed Heat Treatment Cycle
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-6 space-y-6">
+            <p className="text-sm text-muted-foreground">
+              The properties of the redesigned alloy are achieved through the following standardized thermal process:
+            </p>
+
+            {/* 1. Process Overview */}
+            <div className="p-4 rounded-lg border border-border bg-card">
+              <h4 className="font-semibold text-foreground mb-3 flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold">1</span>
+                Process Overview
+              </h4>
+              <div className="space-y-2 ml-8">
+                {redesigned_alloy.heat_treatment_cycle.type && (
+                  <div className="flex gap-2">
+                    <span className="font-medium text-muted-foreground">Type:</span>
+                    <span className="text-foreground">{redesigned_alloy.heat_treatment_cycle.type}</span>
+                  </div>
+                )}
+                {redesigned_alloy.heat_treatment_cycle.predicted_microstructure && (
+                  <div className="flex gap-2">
+                    <span className="font-medium text-muted-foreground">Predicted Microstructure:</span>
+                    <span className="text-foreground">{redesigned_alloy.heat_treatment_cycle.predicted_microstructure}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 2. Austenitizing (Soaking) */}
+            <div className="p-4 rounded-lg border border-border bg-gradient-to-r from-red-500/5 to-orange-500/5">
+              <h4 className="font-semibold text-foreground mb-3 flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full bg-red-500/10 text-red-500 flex items-center justify-center text-sm font-bold">2</span>
+                <Thermometer className="w-4 h-4 text-red-500" />
+                Austenitizing (Soaking)
+              </h4>
+              <div className="space-y-2 ml-8">
+                {redesigned_alloy.heat_treatment_cycle.austenitizing_temp && (
+                  <div className="flex gap-2">
+                    <span className="font-medium text-muted-foreground">Temperature:</span>
+                    <span className="text-foreground font-semibold">{redesigned_alloy.heat_treatment_cycle.austenitizing_temp}</span>
+                  </div>
+                )}
+                {redesigned_alloy.heat_treatment_cycle.soaking_time && (
+                  <div className="flex gap-2">
+                    <span className="font-medium text-muted-foreground">Time:</span>
+                    <span className="text-foreground font-semibold">{redesigned_alloy.heat_treatment_cycle.soaking_time}</span>
+                  </div>
+                )}
+                <div className="mt-2 p-2 rounded bg-muted/30 text-xs text-muted-foreground italic">
+                  <strong>Rationale:</strong> To dissolve carbon and alloying elements into the austenite phase for optimal hardening.
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Quenching (Rapid Cooling) */}
+            <div className="p-4 rounded-lg border border-border bg-gradient-to-r from-blue-500/5 to-cyan-500/5">
+              <h4 className="font-semibold text-foreground mb-3 flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full bg-blue-500/10 text-blue-500 flex items-center justify-center text-sm font-bold">3</span>
+                <Droplets className="w-4 h-4 text-blue-500" />
+                Quenching (Rapid Cooling)
+              </h4>
+              <div className="space-y-2 ml-8">
+                {redesigned_alloy.heat_treatment_cycle.quenching_medium && (
+                  <div className="flex gap-2">
+                    <span className="font-medium text-muted-foreground">Medium:</span>
+                    <span className="text-foreground font-semibold">{redesigned_alloy.heat_treatment_cycle.quenching_medium}</span>
+                  </div>
+                )}
+                {redesigned_alloy.heat_treatment_cycle.cooling_rate && (
+                  <div className="flex gap-2">
+                    <span className="font-medium text-muted-foreground">Cooling Rate:</span>
+                    <span className="text-foreground font-semibold">{redesigned_alloy.heat_treatment_cycle.cooling_rate}</span>
+                  </div>
+                )}
+                <div className="mt-2 p-2 rounded bg-muted/30 text-xs text-muted-foreground italic">
+                  <strong>Rationale:</strong> To suppress the formation of pearlite/bainite and maximize the conversion to high-strength martensite.
+                </div>
+              </div>
+            </div>
+
+            {/* 4. Tempering (Stress Relief & Ductility) */}
+            {redesigned_alloy.heat_treatment_cycle.tempering_stage && (
+              <div className="p-4 rounded-lg border border-border bg-gradient-to-r from-amber-500/5 to-yellow-500/5">
+                <h4 className="font-semibold text-foreground mb-3 flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-amber-500/10 text-amber-500 flex items-center justify-center text-sm font-bold">4</span>
+                  <Timer className="w-4 h-4 text-amber-500" />
+                  Tempering (Stress Relief & Ductility)
+                </h4>
+                <div className="space-y-2 ml-8">
+                  {redesigned_alloy.heat_treatment_cycle.tempering_stage.required !== undefined && (
+                    <div className="flex gap-2">
+                      <span className="font-medium text-muted-foreground">Required:</span>
+                      <span className={`font-semibold ${redesigned_alloy.heat_treatment_cycle.tempering_stage.required ? 'text-success' : 'text-muted-foreground'}`}>
+                        {redesigned_alloy.heat_treatment_cycle.tempering_stage.required ? 'Yes' : 'No'}
+                      </span>
+                    </div>
+                  )}
+                  {redesigned_alloy.heat_treatment_cycle.tempering_stage.temp && (
+                    <div className="flex gap-2">
+                      <span className="font-medium text-muted-foreground">Temperature:</span>
+                      <span className="text-foreground font-semibold">{redesigned_alloy.heat_treatment_cycle.tempering_stage.temp}</span>
+                    </div>
+                  )}
+                  {redesigned_alloy.heat_treatment_cycle.tempering_stage.time && (
+                    <div className="flex gap-2">
+                      <span className="font-medium text-muted-foreground">Time:</span>
+                      <span className="text-foreground font-semibold">{redesigned_alloy.heat_treatment_cycle.tempering_stage.time}</span>
+                    </div>
+                  )}
+                  <div className="mt-2 p-2 rounded bg-muted/30 text-xs text-muted-foreground italic">
+                    <strong>Rationale:</strong> To relieve internal stresses, improve toughness, and adjust the final hardness to the target specification.
+                  </div>
+                </div>
               </div>
             )}
           </CardContent>
