@@ -62,6 +62,55 @@ const examples: ExampleAlloy[] = [
     },
     description: "Standard structural steel for construction and general engineering",
   },
+  {
+    name: "Fe 500D",
+    composition: {
+      C: "0.18",
+      Mn: "1.20",
+      S: "0.035",
+      P: "0.035",
+      V: "0.005",
+    },
+    properties: {
+      tensile_strength: "580 MPa",
+      yield_strength: "510 MPa",
+      operating_conditions: "Ambient, High Seismic Zone",
+    },
+    description: "TMT rebar steel for seismic zones with 6% elongation and 0.40 max CE",
+  },
+  {
+    name: "Fe 500D CRS",
+    composition: {
+      C: "0.15",
+      Mn: "1.10",
+      S: "0.030",
+      P: "0.030",
+      Cu: "0.20",
+      Cr: "0.15",
+    },
+    properties: {
+      tensile_strength: "590 MPa",
+      yield_strength: "520 MPa",
+      operating_conditions: "Saline/Chloride Marine Environment",
+    },
+    description: "Corrosion-resistant TMT rebar for marine environments with minimized corrosion rate",
+  },
+  {
+    name: "Fe 550D",
+    composition: {
+      C: "0.22",
+      Mn: "1.30",
+      S: "0.040",
+      P: "0.040",
+      Nb: "0.015",
+    },
+    properties: {
+      tensile_strength: "610 MPa",
+      yield_strength: "540 MPa",
+      operating_conditions: "Ambient, Heavy Load Structure",
+    },
+    description: "High-strength TMT rebar for heavy load structures targeting 560 MPa yield",
+  },
 ];
 
 export const ExampleSelector = () => {
