@@ -1,8 +1,11 @@
 import { AlloyResult } from "@/types/alloy";
-import { CheckCircle2, Loader2, Clock, TrendingUp, Flame, Droplets, Thermometer, Timer } from "lucide-react";
+import { CheckCircle2, Loader2, Clock, TrendingUp, Flame, Droplets, Thermometer, Timer, MessageCircle, Send } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 
 interface ResultsDisplayProps {
   result: AlloyResult | null;
@@ -10,7 +13,60 @@ interface ResultsDisplayProps {
 }
 
 export const ResultsDisplay = ({ result, isLoading }: ResultsDisplayProps) => {
+  const { toast } = useToast();
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [userQuestion, setUserQuestion] = useState("");
+  const [aiAnswer, setAiAnswer] = useState("");
+  const [isAskingAI, setIsAskingAI] = useState(false);
+
+  // Handle Ask AI function
+  const handleAskAI = async () => {
+    if (!userQuestion.trim() || !result) {
+      toast({
+        title: "Cannot ask question",
+        description: "Please enter a question and ensure results are available.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsAskingAI(true);
+    setAiAnswer("");
+
+    try {
+      const response = await fetch(
+        "https://tejanaidu.app.n8n.cloud/webhook/ask-results",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            userQuestion: userQuestion.trim(),
+            fullResultContext: result, // The entire JSON object stored from the redesign API
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      // Handle response - could be string directly or in a response field
+      const answer = typeof data === 'string' ? data : (data.response || data.answer || data.message || JSON.stringify(data));
+      setAiAnswer(answer);
+    } catch (error) {
+      console.error("Error asking AI:", error);
+      toast({
+        title: "AI Query Failed",
+        description: error instanceof Error ? error.message : "Failed to get AI response",
+        variant: "destructive",
+      });
+    } finally {
+      setIsAskingAI(false);
+    }
+  };
 
   useEffect(() => {
     if (isLoading) {
@@ -442,6 +498,62 @@ export const ResultsDisplay = ({ result, isLoading }: ResultsDisplayProps) => {
           </CardContent>
         </Card>
       )}
+
+      {/* Section 7: Ask the Metallurgical AI */}
+      <Card className="shadow-lg border-border/50">
+        <CardHeader className="bg-gradient-to-r from-violet-500/10 to-purple-500/10 border-b">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <MessageCircle className="w-5 h-5 text-violet-500" />
+            💬 Ask the Metallurgical AI
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pt-6 space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Have questions about this redesigned alloy? Ask our AI expert for detailed explanations.
+          </p>
+          
+          {/* Question Input */}
+          <Textarea
+            placeholder="e.g., Why was Vanadium added to the composition? What are the benefits of the TMT process?"
+            value={userQuestion}
+            onChange={(e) => setUserQuestion(e.target.value)}
+            className="min-h-[100px] resize-none"
+            disabled={isAskingAI}
+          />
+          
+          {/* Ask Button */}
+          <Button
+            onClick={handleAskAI}
+            disabled={isAskingAI || !userQuestion.trim()}
+            className="w-full bg-gradient-to-r from-violet-500 to-purple-500 hover:from-violet-600 hover:to-purple-600"
+          >
+            {isAskingAI ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Analyzing...
+              </>
+            ) : (
+              <>
+                <Send className="w-4 h-4 mr-2" />
+                Ask AI
+              </>
+            )}
+          </Button>
+
+          {/* AI Answer Display */}
+          {aiAnswer && (
+            <div className="p-4 rounded-lg bg-gradient-to-br from-violet-500/5 to-purple-500/5 border border-violet-500/20">
+              <div className="text-xs font-medium text-violet-500 uppercase tracking-wide mb-2 flex items-center gap-1">
+                <MessageCircle className="w-3 h-3" />
+                AI Response
+              </div>
+              <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
+                {aiAnswer}
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 };
