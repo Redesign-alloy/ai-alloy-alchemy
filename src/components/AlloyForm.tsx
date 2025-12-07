@@ -26,7 +26,7 @@ export const AlloyForm = ({ onSubmit, isLoading }: AlloyFormProps) => {
     { id: "2", name: "Yield Strength", value: "", unit: "MPa" },
   ]);
   const [improvements, setImprovements] = useState<DesiredImprovement[]>([
-    { id: "1", property: "Target Tensile Strength", value: "" },
+    { id: "1", property: "Target Tensile Strength", value: "", unit: "MPa" },
   ]);
   const [operatingConditions, setOperatingConditions] = useState("");
   const [maxPriceIncrease, setMaxPriceIncrease] = useState("");
@@ -108,7 +108,7 @@ export const AlloyForm = ({ onSubmit, isLoading }: AlloyFormProps) => {
   const addImprovement = () => {
     setImprovements([
       ...improvements,
-      { id: Date.now().toString(), property: "", value: "" },
+      { id: Date.now().toString(), property: "", value: "", unit: "" },
     ]);
   };
 
@@ -118,7 +118,7 @@ export const AlloyForm = ({ onSubmit, isLoading }: AlloyFormProps) => {
     }
   };
 
-  const updateImprovement = (id: string, field: "property" | "value", value: string) => {
+  const updateImprovement = (id: string, field: "property" | "value" | "unit", value: string) => {
     setImprovements(
       improvements.map((imp) => (imp.id === id ? { ...imp, [field]: value } : imp))
     );
@@ -151,6 +151,15 @@ export const AlloyForm = ({ onSubmit, isLoading }: AlloyFormProps) => {
       }
     });
 
+    // Build desired_improvements_array with name, value, unit structure
+    const desiredImprovementsArray = improvements
+      .filter((imp) => imp.property && imp.value)
+      .map((imp) => ({
+        name: imp.property,
+        value: imp.value,
+        unit: imp.unit,
+      }));
+
     const data: AlloyData = {
       original_alloy: {
         name: alloyName,
@@ -158,6 +167,7 @@ export const AlloyForm = ({ onSubmit, isLoading }: AlloyFormProps) => {
         properties: propertiesObj,
       },
       desired_improvements: improvements.filter((imp) => imp.property && imp.value),
+      desired_improvements_array: desiredImprovementsArray,
       operating_conditions: operatingConditions,
       max_price_increase: maxPriceIncrease,
     };
@@ -321,15 +331,22 @@ export const AlloyForm = ({ onSubmit, isLoading }: AlloyFormProps) => {
               {improvements.map((imp) => (
                 <div key={imp.id} className="flex gap-2">
                   <Input
-                    placeholder="Property"
+                    placeholder="Property Name"
                     value={imp.property}
                     onChange={(e) => updateImprovement(imp.id, "property", e.target.value)}
-                    className="w-1/2"
+                    className="w-1/3"
                   />
                   <Input
-                    placeholder="Target Value"
+                    placeholder="Value"
                     value={imp.value}
                     onChange={(e) => updateImprovement(imp.id, "value", e.target.value)}
+                    className="w-1/4"
+                  />
+                  <Input
+                    placeholder="Unit"
+                    value={imp.unit}
+                    onChange={(e) => updateImprovement(imp.id, "unit", e.target.value)}
+                    className="w-1/4"
                   />
                   {improvements.length > 1 && (
                     <Button

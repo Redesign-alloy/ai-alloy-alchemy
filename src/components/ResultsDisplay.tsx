@@ -1,5 +1,5 @@
-import { AlloyResult } from "@/types/alloy";
-import { CheckCircle2, Loader2, Clock, TrendingUp, Flame, Droplets, Thermometer, Timer, MessageCircle, Send, IndianRupee } from "lucide-react";
+import { AlloyResult, AchievedImprovement } from "@/types/alloy";
+import { CheckCircle2, Loader2, Clock, TrendingUp, Flame, Droplets, Thermometer, Timer, MessageCircle, Send, IndianRupee, CheckCircle, XCircle, AlertCircle } from "lucide-react";
 import { useEffect, useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -171,17 +171,53 @@ export const ResultsDisplay = ({ result, isLoading }: ResultsDisplayProps) => {
     }
   }
 
-  // Extract desired_improvements (may be nested in estimated_cost_per_kgfinal_output)
-  let desiredImprovements: any = null;
-  if (redesigned_alloy.estimated_cost_per_kgfinal_output?.desired_improvements) {
-    desiredImprovements = redesigned_alloy.estimated_cost_per_kgfinal_output.desired_improvements;
-  } else if (finalOutput.desired_improvements) {
-    desiredImprovements = finalOutput.desired_improvements;
-  } else if (redesigned_alloy.desired_improvements) {
-    desiredImprovements = redesigned_alloy.desired_improvements;
+  // Extract achieved_improvements array from response
+  let achievedImprovements: AchievedImprovement[] = [];
+  if (redesigned_alloy.achieved_improvements && Array.isArray(redesigned_alloy.achieved_improvements)) {
+    achievedImprovements = redesigned_alloy.achieved_improvements;
+  } else if (finalOutput.achieved_improvements && Array.isArray(finalOutput.achieved_improvements)) {
+    achievedImprovements = finalOutput.achieved_improvements;
   }
 
-  console.log("Desired improvements:", desiredImprovements);
+  console.log("Achieved improvements:", achievedImprovements);
+
+  // Helper function to get status styling
+  const getStatusStyle = (status: string) => {
+    const lowerStatus = status.toLowerCase();
+    if (lowerStatus === 'achieved' || lowerStatus === 'exceeded') {
+      return {
+        bg: 'bg-success/10',
+        border: 'border-success/30',
+        text: 'text-success',
+        icon: <CheckCircle className="w-5 h-5 text-success" />,
+      };
+    } else if (lowerStatus === 'failed' || lowerStatus === 'not met') {
+      return {
+        bg: 'bg-destructive/10',
+        border: 'border-destructive/30',
+        text: 'text-destructive',
+        icon: <XCircle className="w-5 h-5 text-destructive" />,
+      };
+    }
+    return {
+      bg: 'bg-warning/10',
+      border: 'border-warning/30',
+      text: 'text-warning',
+      icon: <AlertCircle className="w-5 h-5 text-warning" />,
+    };
+  };
+
+  // Helper function to parse research-style Q&A output
+  const parseResearchOutput = (text: string) => {
+    const parts = text.split('---');
+    const analysis = parts[0]?.trim() || text;
+    const sources = parts[1]?.trim() || '';
+    
+    // Replace [^X] with superscript citations
+    const formattedAnalysis = analysis.replace(/\[\^(\d+)\]/g, '<sup class="text-primary font-medium">[$1]</sup>');
+    
+    return { analysis: formattedAnalysis, sources };
+  };
 
   return (
     <div className="space-y-6">
@@ -295,27 +331,50 @@ export const ResultsDisplay = ({ result, isLoading }: ResultsDisplayProps) => {
         )}
       </div>
 
-      {/* Desired Improvements (if found) */}
-      {desiredImprovements && Object.keys(desiredImprovements).length > 0 && (
+      {/* Achieved Improvements - Dynamic Array Rendering */}
+      {achievedImprovements.length > 0 && (
         <Card className="shadow-lg border-border/50">
           <CardHeader className="bg-gradient-to-r from-primary/5 to-accent/5 border-b">
-            <CardTitle className="text-lg">Desired Improvements</CardTitle>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-primary" />
+              Achieved Improvements
+            </CardTitle>
           </CardHeader>
           <CardContent className="pt-6">
-            <div className="grid gap-3">
-              {Object.entries(desiredImprovements).map(([key, value]) => (
-                <div key={key} className="p-4 rounded-lg border border-border bg-secondary/30 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <TrendingUp className="w-5 h-5 text-primary" />
-                    <span className="font-semibold text-foreground capitalize">
-                      {key.replace(/_/g, " ")}
-                    </span>
+            <div className="grid gap-4">
+              {achievedImprovements.map((improvement, index) => {
+                const statusStyle = getStatusStyle(improvement.status);
+                return (
+                  <div
+                    key={index}
+                    className={`p-4 rounded-lg border ${statusStyle.bg} ${statusStyle.border}`}
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1">
+                        <div className="font-semibold text-foreground mb-2">
+                          {improvement.goal_name}
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                          <div>
+                            <span className="text-muted-foreground">Target: </span>
+                            <span className="font-medium text-foreground">{improvement.target_value}</span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Result: </span>
+                            <span className="font-bold text-foreground">{improvement.achieved_value}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {statusStyle.icon}
+                        <span className={`text-sm font-semibold ${statusStyle.text}`}>
+                          {improvement.status}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-lg font-bold text-primary">
-                    {String(value)}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </CardContent>
         </Card>
@@ -502,19 +561,6 @@ export const ResultsDisplay = ({ result, isLoading }: ResultsDisplayProps) => {
         </Card>
       )}
 
-      {/* Estimated Cost per Kg */}
-      {desiredImprovements && Object.entries(desiredImprovements).some(([key]) => key.includes('cost')) && (
-        <Card className="shadow-sm bg-gradient-to-br from-accent/10 to-accent/5 border-accent/20">
-          <CardContent className="pt-6 text-center">
-            <div className="text-3xl font-bold text-accent mb-2">
-              ₹{String(Object.entries(desiredImprovements).find(([key]) => key.includes('cost'))?.[1] || '')}
-            </div>
-            <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Estimated Cost per Kg
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Section 7: Ask the Metallurgical AI */}
       <Card className="shadow-lg border-border/50">
@@ -557,18 +603,61 @@ export const ResultsDisplay = ({ result, isLoading }: ResultsDisplayProps) => {
             )}
           </Button>
 
-          {/* AI Answer Display */}
-          {aiAnswer && (
-            <div className="p-4 rounded-lg bg-gradient-to-br from-violet-500/5 to-purple-500/5 border border-violet-500/20">
-              <div className="text-xs font-medium text-violet-500 uppercase tracking-wide mb-2 flex items-center gap-1">
-                <MessageCircle className="w-3 h-3" />
-                AI Response
+          {/* AI Answer Display - Research Style with Citations */}
+          {aiAnswer && (() => {
+            const { analysis, sources } = parseResearchOutput(aiAnswer);
+            return (
+              <div className="space-y-4">
+                {/* Analysis Section */}
+                <div className="p-4 rounded-lg bg-gradient-to-br from-violet-500/5 to-purple-500/5 border border-violet-500/20">
+                  <div className="text-xs font-medium text-violet-500 uppercase tracking-wide mb-3 flex items-center gap-1">
+                    <MessageCircle className="w-3 h-3" />
+                    Final Metallurgical Analysis
+                  </div>
+                  <div 
+                    className="text-sm text-foreground leading-relaxed prose prose-sm max-w-none"
+                    dangerouslySetInnerHTML={{ __html: analysis.replace(/\n/g, '<br />') }}
+                  />
+                </div>
+
+                {/* Sources Section */}
+                {sources && (
+                  <div className="p-4 rounded-lg bg-muted/30 border border-border">
+                    <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">
+                      📚 Verified Sources
+                    </div>
+                    <hr className="border-border mb-3" />
+                    <div className="text-sm text-muted-foreground leading-relaxed">
+                      {sources.split('\n').map((line, idx) => {
+                        // Make URLs clickable
+                        const urlRegex = /(https?:\/\/[^\s]+)/g;
+                        const parts = line.split(urlRegex);
+                        return (
+                          <p key={idx} className="mb-1">
+                            {parts.map((part, partIdx) => 
+                              urlRegex.test(part) ? (
+                                <a 
+                                  key={partIdx}
+                                  href={part}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-primary hover:underline break-all"
+                                >
+                                  {part}
+                                </a>
+                              ) : (
+                                <span key={partIdx}>{part}</span>
+                              )
+                            )}
+                          </p>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
-              <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
-                {aiAnswer}
-              </p>
-            </div>
-          )}
+            );
+          })()}
         </CardContent>
       </Card>
     </div>
