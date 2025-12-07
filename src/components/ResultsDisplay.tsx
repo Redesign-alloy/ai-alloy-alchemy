@@ -1,11 +1,12 @@
 import { AlloyResult } from "@/types/alloy";
-import { CheckCircle2, Loader2, Clock, TrendingUp, Flame, Droplets, Thermometer, Timer, MessageCircle, Send } from "lucide-react";
-import { useEffect, useState } from "react";
+import { CheckCircle2, Loader2, Clock, TrendingUp, Flame, Droplets, Thermometer, Timer, MessageCircle, Send, IndianRupee } from "lucide-react";
+import { useEffect, useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { calculateCompositionCostFromObject } from "@/lib/elementPrices";
 
 interface ResultsDisplayProps {
   result: AlloyResult | null;
@@ -213,6 +214,22 @@ export const ResultsDisplay = ({ result, isLoading }: ResultsDisplayProps) => {
                   </div>
                 </div>
               ))}
+            </div>
+            
+            {/* Calculated Cost Display for Redesigned Composition */}
+            <div className="mt-4 p-4 bg-gradient-to-r from-primary/10 to-accent/10 rounded-lg border border-primary/20">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <IndianRupee className="w-5 h-5 text-primary" />
+                  <span className="font-medium text-foreground">Estimated Cost per kg (₹)</span>
+                </div>
+                <span className="text-2xl font-bold text-primary">
+                  ₹{calculateCompositionCostFromObject(parsedComposition).toFixed(2)}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Calculated from redesigned composition using live elemental prices
+              </p>
             </div>
           </CardContent>
         </Card>

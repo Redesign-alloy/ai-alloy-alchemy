@@ -1,12 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Trash2, Sparkles } from "lucide-react";
-import { AlloyData, DesiredImprovement, ExampleAlloy } from "@/types/alloy";
+import { Plus, Trash2, Sparkles, IndianRupee } from "lucide-react";
+import { AlloyData, DesiredImprovement, ExampleAlloy, PropertyItem } from "@/types/alloy";
 import { useToast } from "@/hooks/use-toast";
+import { calculateCompositionCost } from "@/lib/elementPrices";
 
 interface AlloyFormProps {
   onSubmit: (data: AlloyData) => void;
@@ -20,17 +21,20 @@ export const AlloyForm = ({ onSubmit, isLoading }: AlloyFormProps) => {
     { element: "Fe", value: "" },
     { element: "C", value: "" },
   ]);
-  const [properties, setProperties] = useState({
-    tensile_strength: "",
-    yield_strength: "",
-    hardness: "",
-    cost_per_kg: "",
-  });
+  const [dynamicProperties, setDynamicProperties] = useState<PropertyItem[]>([
+    { id: "1", name: "Tensile Strength", value: "", unit: "MPa" },
+    { id: "2", name: "Yield Strength", value: "", unit: "MPa" },
+  ]);
   const [improvements, setImprovements] = useState<DesiredImprovement[]>([
     { id: "1", property: "Target Tensile Strength", value: "" },
   ]);
   const [operatingConditions, setOperatingConditions] = useState("");
   const [maxPriceIncrease, setMaxPriceIncrease] = useState("");
+
+  // Calculate cost based on composition
+  const estimatedCost = useMemo(() => {
+    return calculateCompositionCost(composition);
+  }, [composition]);
 
   // Listen for example load events
   useEffect(() => {
@@ -45,13 +49,20 @@ export const AlloyForm = ({ onSubmit, isLoading }: AlloyFormProps) => {
       }));
       setComposition(compositionArray);
 
-      // Set properties
-      setProperties({
-        tensile_strength: example.properties.tensile_strength || "",
-        yield_strength: example.properties.yield_strength || "",
-        hardness: example.properties.hardness || "",
-        cost_per_kg: example.properties.cost_per_kg?.toString() || "",
-      });
+      // Convert properties to dynamic array
+      const propsArray: PropertyItem[] = [];
+      if (example.properties.tensile_strength) {
+        propsArray.push({ id: Date.now().toString() + "1", name: "Tensile Strength", value: example.properties.tensile_strength.replace(/[^\d.]/g, ''), unit: "MPa" });
+      }
+      if (example.properties.yield_strength) {
+        propsArray.push({ id: Date.now().toString() + "2", name: "Yield Strength", value: example.properties.yield_strength.replace(/[^\d.]/g, ''), unit: "MPa" });
+      }
+      if (example.properties.hardness) {
+        propsArray.push({ id: Date.now().toString() + "3", name: "Hardness", value: example.properties.hardness, unit: "" });
+      }
+      if (propsArray.length > 0) {
+        setDynamicProperties(propsArray);
+      }
     };
 
     window.addEventListener("loadExample", handleLoadExample as EventListener);
@@ -72,6 +83,26 @@ export const AlloyForm = ({ onSubmit, isLoading }: AlloyFormProps) => {
     const updated = [...composition];
     updated[index][field] = value;
     setComposition(updated);
+  };
+
+  // Dynamic properties management
+  const addProperty = () => {
+    setDynamicProperties([
+      ...dynamicProperties,
+      { id: Date.now().toString(), name: "", value: "", unit: "" },
+    ]);
+  };
+
+  const removeProperty = (id: string) => {
+    if (dynamicProperties.length > 1) {
+      setDynamicProperties(dynamicProperties.filter((prop) => prop.id !== id));
+    }
+  };
+
+  const updateProperty = (id: string, field: "name" | "value" | "unit", value: string) => {
+    setDynamicProperties(
+      dynamicProperties.map((prop) => (prop.id === id ? { ...prop, [field]: value } : prop))
+    );
   };
 
   const addImprovement = () => {
@@ -103,16 +134,28 @@ export const AlloyForm = ({ onSubmit, isLoading }: AlloyFormProps) => {
       }
     });
 
+    // Build properties object with dynamic properties
+    const propertiesObj: { [key: string]: string | number | PropertyItem[] | undefined } = {
+      original_properties: dynamicProperties.filter((prop) => prop.name && prop.value),
+      cost_per_kg: estimatedCost,
+    };
+
+    // Also map to legacy fields for backward compatibility
+    dynamicProperties.forEach((prop) => {
+      if (prop.name.toLowerCase().includes("tensile")) {
+        propertiesObj.tensile_strength = `${prop.value} ${prop.unit}`.trim();
+      } else if (prop.name.toLowerCase().includes("yield")) {
+        propertiesObj.yield_strength = `${prop.value} ${prop.unit}`.trim();
+      } else if (prop.name.toLowerCase().includes("hardness")) {
+        propertiesObj.hardness = `${prop.value} ${prop.unit}`.trim();
+      }
+    });
+
     const data: AlloyData = {
       original_alloy: {
         name: alloyName,
         composition: compositionObj,
-        properties: {
-          tensile_strength: properties.tensile_strength,
-          yield_strength: properties.yield_strength,
-          hardness: properties.hardness,
-          cost_per_kg: properties.cost_per_kg ? parseFloat(properties.cost_per_kg) : undefined,
-        },
+        properties: propertiesObj,
       },
       desired_improvements: improvements.filter((imp) => imp.property && imp.value),
       operating_conditions: operatingConditions,
@@ -192,54 +235,71 @@ export const AlloyForm = ({ onSubmit, isLoading }: AlloyFormProps) => {
             </div>
           </div>
 
-          {/* Properties */}
-          <div className="grid md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="tensile">Tensile Strength</Label>
-              <Input
-                id="tensile"
-                value={properties.tensile_strength}
-                onChange={(e) =>
-                  setProperties({ ...properties, tensile_strength: e.target.value })
-                }
-                placeholder="e.g., 1080 MPa"
-                className="mt-1.5"
-              />
+          {/* Dynamic Properties */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label>Original Alloy Properties</Label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={addProperty}
+                className="gap-1"
+              >
+                <Plus className="w-4 h-4" />
+                Add Property
+              </Button>
             </div>
-            <div>
-              <Label htmlFor="yield">Yield Strength</Label>
-              <Input
-                id="yield"
-                value={properties.yield_strength}
-                onChange={(e) =>
-                  setProperties({ ...properties, yield_strength: e.target.value })
-                }
-                placeholder="e.g., 850 MPa"
-                className="mt-1.5"
-              />
+            <div className="space-y-2">
+              {dynamicProperties.map((prop) => (
+                <div key={prop.id} className="flex gap-2">
+                  <Input
+                    placeholder="Property Name"
+                    value={prop.name}
+                    onChange={(e) => updateProperty(prop.id, "name", e.target.value)}
+                    className="w-1/3"
+                  />
+                  <Input
+                    placeholder="Value"
+                    value={prop.value}
+                    onChange={(e) => updateProperty(prop.id, "value", e.target.value)}
+                    className="w-1/4"
+                  />
+                  <Input
+                    placeholder="Unit"
+                    value={prop.unit}
+                    onChange={(e) => updateProperty(prop.id, "unit", e.target.value)}
+                    className="w-1/4"
+                  />
+                  {dynamicProperties.length > 1 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeProperty(prop.id)}
+                    >
+                      <Trash2 className="w-4 h-4 text-destructive" />
+                    </Button>
+                  )}
+                </div>
+              ))}
             </div>
-            <div>
-              <Label htmlFor="hardness">Hardness</Label>
-              <Input
-                id="hardness"
-                value={properties.hardness}
-                onChange={(e) => setProperties({ ...properties, hardness: e.target.value })}
-                placeholder="e.g., Rockwell C 35"
-                className="mt-1.5"
-              />
+          </div>
+
+          {/* Estimated Cost Display */}
+          <div className="p-4 bg-muted/50 rounded-lg border border-border/50">
+            <div className="flex items-center justify-between">
+              <Label className="flex items-center gap-2">
+                <IndianRupee className="w-4 h-4 text-primary" />
+                Estimated Cost per kg (₹)
+              </Label>
+              <span className="text-lg font-semibold text-primary">
+                ₹{estimatedCost.toFixed(2)}
+              </span>
             </div>
-            <div>
-              <Label htmlFor="cost">Cost per kg ($)</Label>
-              <Input
-                id="cost"
-                type="number"
-                step="0.01"
-                value={properties.cost_per_kg}
-                onChange={(e) => setProperties({ ...properties, cost_per_kg: e.target.value })}
-                placeholder="e.g., 1.45"
-                className="mt-1.5"
-              />
-            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Calculated from composition using live elemental prices
+            </p>
           </div>
 
           {/* Desired Improvements */}

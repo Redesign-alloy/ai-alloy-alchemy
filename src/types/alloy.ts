@@ -2,12 +2,20 @@ export interface Composition {
   [element: string]: number | string;
 }
 
+export interface PropertyItem {
+  id: string;
+  name: string;
+  value: string;
+  unit: string;
+}
+
 export interface Properties {
   tensile_strength?: string;
   yield_strength?: string;
   hardness?: string;
   cost_per_kg?: number;
-  [key: string]: string | number | undefined;
+  original_properties?: PropertyItem[];
+  [key: string]: string | number | PropertyItem[] | undefined;
 }
 
 export interface DesiredImprovement {
