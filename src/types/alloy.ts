@@ -22,6 +22,20 @@ export interface DesiredImprovement {
   id: string;
   property: string;
   value: string;
+  unit: string;
+}
+
+export interface AchievedImprovement {
+  goal_name: string;
+  target_value: string;
+  achieved_value: string;
+  status: 'Achieved' | 'Exceeded' | 'Failed' | 'Not Met' | string;
+}
+
+export interface DesiredImprovementPayload {
+  name: string;
+  value: string;
+  unit: string;
 }
 
 export interface AlloyData {
@@ -31,6 +45,7 @@ export interface AlloyData {
     properties: Properties;
   };
   desired_improvements: DesiredImprovement[];
+  desired_improvements_array?: DesiredImprovementPayload[];
   operating_conditions?: string;
   max_price_increase?: string;
 }
