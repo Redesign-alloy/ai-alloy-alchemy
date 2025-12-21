@@ -36,7 +36,7 @@ export const ResultsDisplay = ({ result, isLoading }: ResultsDisplayProps) => {
 
     try {
       const response = await fetch(
-        "https://tejanaidu2.app.n8n.cloud/webhook/ask-results",
+        "https://tejanaidu4.app.n8n.cloud/webhook/ask-results",
         {
           method: "POST",
           headers: {
