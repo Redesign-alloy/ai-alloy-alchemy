@@ -207,16 +207,79 @@ export const ResultsDisplay = ({ result, isLoading }: ResultsDisplayProps) => {
     };
   };
 
-  // Helper function to parse research-style Q&A output
-  const parseResearchOutput = (text: string) => {
-    const parts = text.split('---');
-    const analysis = parts[0]?.trim() || text;
-    const sources = parts[1]?.trim() || '';
+  // Helper function to parse research-style Q&A output from JSON response
+  const parseResearchOutput = (response: string) => {
+    let outputText = '';
     
-    // Replace [^X] with superscript citations
-    const formattedAnalysis = analysis.replace(/\[\^(\d+)\]/g, '<sup class="text-primary font-medium">[$1]</sup>');
+    // Try to parse as JSON array first (webhook response format)
+    try {
+      const parsed = JSON.parse(response);
+      if (Array.isArray(parsed) && parsed[0]?.output) {
+        outputText = parsed[0].output;
+      } else if (parsed.output) {
+        outputText = parsed.output;
+      } else if (typeof parsed === 'string') {
+        outputText = parsed;
+      } else {
+        outputText = response;
+      }
+    } catch {
+      // If not JSON, use as-is
+      outputText = response;
+    }
+
+    // Split by the "---" separator to get analysis and sources sections
+    const parts = outputText.split('---');
+    let analysisText = parts[0]?.trim() || outputText;
+    let sourcesText = parts.slice(1).join('---').trim() || '';
     
-    return { analysis: formattedAnalysis, sources };
+    // Parse markdown headers and format content
+    // Replace ### headers with styled versions
+    analysisText = analysisText
+      .replace(/^### (\d+)\.\s*(.+)$/gm, '<h3 class="text-lg font-bold text-foreground mt-4 mb-2 flex items-center gap-2"><span class="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold">$1</span>$2</h3>')
+      .replace(/^## (.+)$/gm, '<h2 class="text-xl font-bold text-foreground mt-4 mb-2">$1</h2>')
+      .replace(/^# (.+)$/gm, '<h1 class="text-2xl font-bold text-foreground mt-4 mb-2">$1</h1>');
+    
+    // Replace [^X] and [^X, ^Y, ^Z] patterns with superscript citations
+    analysisText = analysisText.replace(/\[\^(\d+)(?:,\s*\^(\d+))?(?:,\s*\^(\d+))?\]/g, (match, g1, g2, g3) => {
+      const nums = [g1, g2, g3].filter(Boolean);
+      return `<sup class="text-primary font-semibold cursor-pointer hover:underline">[${nums.join(', ')}]</sup>`;
+    });
+    
+    // Replace **bold** with <strong>
+    analysisText = analysisText.replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold text-foreground">$1</strong>');
+    
+    // Replace *italic* with <em>
+    analysisText = analysisText.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+    // Parse sources section - extract numbered sources with Title and URL
+    const sources: { number: string; title: string; url: string }[] = [];
+    if (sourcesText) {
+      // Look for patterns like "1. **Title:** text URL: https://..."
+      const sourceRegex = /(\d+)\.\s*\*?\*?(?:Title:)?\*?\*?\s*(.+?)\s*(?:\*?\*?URL:\*?\*?|URL:)\s*(https?:\/\/[^\s]+)/gi;
+      let match;
+      while ((match = sourceRegex.exec(sourcesText)) !== null) {
+        sources.push({
+          number: match[1],
+          title: match[2].trim().replace(/\*\*/g, ''),
+          url: match[3].trim()
+        });
+      }
+      
+      // Fallback: try simpler pattern if no matches
+      if (sources.length === 0) {
+        const simpleRegex = /(\d+)\.\s*(.+?)\s+(https?:\/\/[^\s]+)/g;
+        while ((match = simpleRegex.exec(sourcesText)) !== null) {
+          sources.push({
+            number: match[1],
+            title: match[2].trim().replace(/\*\*/g, ''),
+            url: match[3].trim()
+          });
+        }
+      }
+    }
+    
+    return { analysis: analysisText, sources };
   };
 
   return (
@@ -607,51 +670,50 @@ export const ResultsDisplay = ({ result, isLoading }: ResultsDisplayProps) => {
           {aiAnswer && (() => {
             const { analysis, sources } = parseResearchOutput(aiAnswer);
             return (
-              <div className="space-y-4">
+              <div className="space-y-4 animate-in fade-in-50 slide-in-from-bottom-4 duration-500">
                 {/* Analysis Section */}
-                <div className="p-4 rounded-lg bg-gradient-to-br from-violet-500/5 to-purple-500/5 border border-violet-500/20">
-                  <div className="text-xs font-medium text-violet-500 uppercase tracking-wide mb-3 flex items-center gap-1">
-                    <MessageCircle className="w-3 h-3" />
+                <div className="p-6 rounded-lg bg-gradient-to-br from-violet-500/5 to-purple-500/5 border border-violet-500/20">
+                  <div className="text-xs font-medium text-violet-500 uppercase tracking-wide mb-4 flex items-center gap-2">
+                    <MessageCircle className="w-4 h-4" />
                     Final Metallurgical Analysis
                   </div>
                   <div 
-                    className="text-sm text-foreground leading-relaxed prose prose-sm max-w-none"
-                    dangerouslySetInnerHTML={{ __html: analysis.replace(/\n/g, '<br />') }}
+                    className="text-sm text-foreground leading-relaxed prose prose-sm max-w-none [&>h3]:border-b [&>h3]:border-border/30 [&>h3]:pb-2"
+                    dangerouslySetInnerHTML={{ __html: analysis.replace(/\n\n/g, '</p><p class="mt-3">').replace(/\n/g, '<br />') }}
                   />
                 </div>
 
                 {/* Sources Section */}
-                {sources && (
-                  <div className="p-4 rounded-lg bg-muted/30 border border-border">
-                    <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">
-                      📚 Verified Sources
+                {sources.length > 0 && (
+                  <div className="p-4 rounded-lg bg-muted/30 border border-border animate-in fade-in-50 duration-300 delay-200">
+                    <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
+                      📚 Verified Research Sources
                     </div>
                     <hr className="border-border mb-3" />
-                    <div className="text-sm text-muted-foreground leading-relaxed">
-                      {sources.split('\n').map((line, idx) => {
-                        // Make URLs clickable
-                        const urlRegex = /(https?:\/\/[^\s]+)/g;
-                        const parts = line.split(urlRegex);
-                        return (
-                          <p key={idx} className="mb-1">
-                            {parts.map((part, partIdx) => 
-                              urlRegex.test(part) ? (
-                                <a 
-                                  key={partIdx}
-                                  href={part}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-primary hover:underline break-all"
-                                >
-                                  {part}
-                                </a>
-                              ) : (
-                                <span key={partIdx}>{part}</span>
-                              )
-                            )}
-                          </p>
-                        );
-                      })}
+                    <div className="space-y-2">
+                      {sources.map((source, idx) => (
+                        <div 
+                          key={idx} 
+                          className="flex items-start gap-3 p-2 rounded-md hover:bg-muted/50 transition-colors"
+                        >
+                          <span className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold flex-shrink-0">
+                            {source.number}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-sm text-foreground mb-0.5">
+                              {source.title}
+                            </div>
+                            <a 
+                              href={source.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-primary hover:underline break-all"
+                            >
+                              {source.url}
+                            </a>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}
