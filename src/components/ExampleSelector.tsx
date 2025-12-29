@@ -55,7 +55,7 @@ const examples: ExampleAlloy[] = [
       S: "0.05",
     },
     properties: {
-      tensile_strength: "400-550 MPa",
+      tensile_strength: "475 MPa",
       yield_strength: "250 MPa",
       hardness: "Rockwell B 70",
       cost_per_kg: 0.85,
