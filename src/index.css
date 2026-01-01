@@ -2,90 +2,111 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+/* Enterprise Design System - Slate Gray, Industrial Blue, Clean White */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 @layer base {
   :root {
-    --background: 210 20% 98%;
-    --foreground: 215 25% 15%;
+    /* Clean White Base */
+    --background: 210 25% 98%;
+    --foreground: 215 30% 15%;
 
+    /* Card - Pure White */
     --card: 0 0% 100%;
-    --card-foreground: 215 25% 15%;
+    --card-foreground: 215 30% 15%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 215 25% 15%;
+    --popover-foreground: 215 30% 15%;
 
-    --primary: 210 60% 45%;
+    /* Industrial Blue - Primary */
+    --primary: 215 75% 45%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 210 15% 92%;
-    --secondary-foreground: 215 25% 15%;
+    /* Slate Gray - Secondary */
+    --secondary: 215 15% 90%;
+    --secondary-foreground: 215 30% 20%;
 
-    --muted: 210 15% 95%;
-    --muted-foreground: 215 12% 45%;
+    --muted: 215 20% 94%;
+    --muted-foreground: 215 15% 45%;
 
-    --accent: 195 85% 50%;
+    /* Accent - Bright Industrial Blue */
+    --accent: 205 90% 50%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 210 20% 88%;
-    --input: 210 20% 88%;
-    --ring: 210 60% 45%;
+    --border: 215 20% 88%;
+    --input: 215 20% 88%;
+    --ring: 215 75% 45%;
 
-    --radius: 0.75rem;
+    --radius: 0.5rem;
 
-    --steel-dark: 215 30% 20%;
-    --steel-medium: 210 25% 50%;
-    --steel-light: 210 30% 85%;
-    --metallic: 200 15% 65%;
-    --success: 142 71% 45%;
-    --warning: 38 92% 50%;
+    /* Extended Palette */
+    --steel-dark: 215 35% 18%;
+    --steel-medium: 215 25% 40%;
+    --steel-light: 215 20% 85%;
+    --metallic: 215 15% 55%;
+    --success: 145 65% 42%;
+    --warning: 38 95% 50%;
 
-    --gradient-primary: linear-gradient(135deg, hsl(210 60% 45%), hsl(195 85% 50%));
-    --gradient-steel: linear-gradient(180deg, hsl(215 30% 20%), hsl(210 25% 35%));
-    --shadow-elegant: 0 10px 40px -10px hsl(210 60% 45% / 0.25);
+    /* Custom Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(215 75% 45%), hsl(205 90% 50%));
+    --gradient-steel: linear-gradient(180deg, hsl(215 35% 18%), hsl(215 25% 28%));
+    --gradient-hero: linear-gradient(135deg, hsl(215 35% 18%) 0%, hsl(215 45% 25%) 50%, hsl(205 60% 35%) 100%);
+    
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 hsl(215 30% 15% / 0.05);
+    --shadow-md: 0 4px 6px -1px hsl(215 30% 15% / 0.1);
+    --shadow-lg: 0 10px 15px -3px hsl(215 30% 15% / 0.1);
+    --shadow-elegant: 0 20px 40px -15px hsl(215 75% 45% / 0.2);
+    
+    /* Transitions */
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-bounce: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
   }
 
   .dark {
-    --background: 215 28% 12%;
-    --foreground: 210 20% 95%;
+    /* Dark Slate Base */
+    --background: 215 35% 10%;
+    --foreground: 210 25% 95%;
 
-    --card: 215 25% 16%;
-    --card-foreground: 210 20% 95%;
+    --card: 215 30% 14%;
+    --card-foreground: 210 25% 95%;
 
-    --popover: 215 25% 16%;
-    --popover-foreground: 210 20% 95%;
+    --popover: 215 30% 14%;
+    --popover-foreground: 210 25% 95%;
 
-    --primary: 210 75% 55%;
+    /* Industrial Blue - Primary (brighter in dark) */
+    --primary: 210 80% 55%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 215 20% 22%;
-    --secondary-foreground: 210 20% 95%;
+    /* Slate - Secondary */
+    --secondary: 215 25% 20%;
+    --secondary-foreground: 210 25% 95%;
 
-    --muted: 215 20% 20%;
-    --muted-foreground: 215 12% 65%;
+    --muted: 215 25% 18%;
+    --muted-foreground: 215 15% 60%;
 
-    --accent: 195 85% 55%;
+    --accent: 205 85% 55%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 215 20% 25%;
-    --input: 215 20% 25%;
-    --ring: 210 75% 55%;
+    --border: 215 25% 22%;
+    --input: 215 25% 22%;
+    --ring: 210 80% 55%;
 
-    --steel-dark: 215 30% 15%;
-    --steel-medium: 210 35% 45%;
-    --steel-light: 210 30% 70%;
-    --metallic: 200 15% 55%;
-    --success: 142 71% 45%;
-    --warning: 38 92% 50%;
+    --steel-dark: 215 30% 12%;
+    --steel-medium: 215 30% 35%;
+    --steel-light: 215 25% 60%;
+    --metallic: 215 20% 50%;
+    --success: 145 65% 45%;
+    --warning: 38 95% 55%;
+
+    --gradient-hero: linear-gradient(135deg, hsl(215 35% 8%) 0%, hsl(215 40% 15%) 50%, hsl(205 50% 25%) 100%);
   }
 }
 
@@ -95,6 +116,43 @@ All colors MUST be HSL.
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
   }
+
+  code, pre {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+@layer utilities {
+  .glass-effect {
+    @apply bg-card/80 backdrop-blur-xl border border-border/50;
+  }
+
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent;
+  }
+
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+
+  .animate-pulse-slow {
+    animation: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  .animate-glow {
+    animation: glow 2s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes glow {
+  from { box-shadow: 0 0 20px hsl(215 75% 45% / 0.3); }
+  to { box-shadow: 0 0 40px hsl(205 90% 50% / 0.5); }
 }
