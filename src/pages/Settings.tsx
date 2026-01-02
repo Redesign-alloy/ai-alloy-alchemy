@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
-import { User, Key, BarChart3, Loader2, Copy, Eye, EyeOff, Trash2 } from "lucide-react";
+import { User, Key, BarChart3, Loader2, Trash2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -34,14 +34,16 @@ const Settings = () => {
   const [saving, setSaving] = useState(false);
   const [newKeyName, setNewKeyName] = useState("");
   const [generatingKey, setGeneratingKey] = useState(false);
-  const [projectCount, setProjectCount] = useState(0);
+  
+  // NEW: Usage state linked to your database search_count
+  const [usageCount, setUsageCount] = useState(0);
   const maxProjects = 50;
 
   useEffect(() => {
     if (user) {
       fetchProfile();
       fetchApiKeys();
-      fetchProjectCount();
+      fetchUsageCount(); // Updated function name
     }
   }, [user]);
 
@@ -54,9 +56,7 @@ const Settings = () => {
         .single();
 
       if (error && error.code !== "PGRST116") throw error;
-      if (data) {
-        setProfile(data);
-      }
+      if (data) setProfile(data);
     } catch (error) {
       console.error("Error fetching profile:", error);
     } finally {
@@ -78,16 +78,20 @@ const Settings = () => {
     }
   };
 
-  const fetchProjectCount = async () => {
+  // UPDATED: Now fetches the search_count from your 'users' table
+  const fetchUsageCount = async () => {
     try {
-      const { count, error } = await supabase
-        .from("projects")
-        .select("*", { count: "exact", head: true });
+      const { data, error } = await supabase
+        .from("users")
+        .select("search_count")
+        .eq("id", user?.id)
+        .single();
 
       if (error) throw error;
-      setProjectCount(count || 0);
+      // Handle NULL values seen in your database
+      setUsageCount(data?.search_count || 0);
     } catch (error) {
-      console.error("Error fetching project count:", error);
+      console.error("Error fetching usage count:", error);
     }
   };
 
@@ -104,63 +108,33 @@ const Settings = () => {
         .eq("user_id", user?.id);
 
       if (error) throw error;
-
-      toast({
-        title: "Profile Updated",
-        description: "Your profile has been saved successfully.",
-      });
+      toast({ title: "Profile Updated", description: "Saved successfully." });
     } catch (error) {
       console.error("Error saving profile:", error);
-      toast({
-        title: "Error",
-        description: "Failed to save profile.",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Failed to save.", variant: "destructive" });
     } finally {
       setSaving(false);
     }
   };
 
   const handleGenerateApiKey = async () => {
-    if (!newKeyName.trim()) {
-      toast({
-        title: "Name Required",
-        description: "Please enter a name for your API key.",
-        variant: "destructive",
-      });
-      return;
-    }
-
+    if (!newKeyName.trim()) return;
     setGeneratingKey(true);
     try {
-      // Generate a random API key
       const key = `aar_${crypto.randomUUID().replace(/-/g, "")}`;
       const keyPreview = `${key.slice(0, 8)}...${key.slice(-4)}`;
-
       const { error } = await supabase.from("api_keys").insert({
         user_id: user?.id,
         name: newKeyName,
-        key_hash: key, // In production, this should be hashed
+        key_hash: key,
         key_preview: keyPreview,
       });
-
       if (error) throw error;
-
-      // Show the full key once
-      toast({
-        title: "API Key Generated",
-        description: `Your key: ${key}. Copy it now - you won't see it again!`,
-      });
-
+      toast({ title: "API Key Generated", description: `Key: ${key}` });
       setNewKeyName("");
       fetchApiKeys();
     } catch (error) {
       console.error("Error generating API key:", error);
-      toast({
-        title: "Error",
-        description: "Failed to generate API key.",
-        variant: "destructive",
-      });
     } finally {
       setGeneratingKey(false);
     }
@@ -172,22 +146,10 @@ const Settings = () => {
         .from("api_keys")
         .update({ revoked_at: new Date().toISOString() })
         .eq("id", keyId);
-
       if (error) throw error;
-
-      toast({
-        title: "Key Revoked",
-        description: "The API key has been revoked.",
-      });
-
       fetchApiKeys();
     } catch (error) {
       console.error("Error revoking key:", error);
-      toast({
-        title: "Error",
-        description: "Failed to revoke API key.",
-        variant: "destructive",
-      });
     }
   };
 
@@ -206,181 +168,102 @@ const Settings = () => {
       <div className="p-6 lg:p-8 max-w-4xl mx-auto">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-foreground">Settings</h1>
-          <p className="text-muted-foreground mt-1">
-            Manage your profile, API keys, and usage
-          </p>
+          <p className="text-muted-foreground mt-1">Manage profile, API keys, and usage</p>
         </div>
 
         <Tabs defaultValue="profile" className="space-y-6">
           <TabsList className="bg-muted">
-            <TabsTrigger value="profile" className="gap-2">
-              <User className="w-4 h-4" />
-              Profile
-            </TabsTrigger>
-            <TabsTrigger value="api" className="gap-2">
-              <Key className="w-4 h-4" />
-              API Keys
-            </TabsTrigger>
-            <TabsTrigger value="usage" className="gap-2">
-              <BarChart3 className="w-4 h-4" />
-              Usage
-            </TabsTrigger>
+            <TabsTrigger value="profile" className="gap-2"><User className="w-4 h-4" />Profile</TabsTrigger>
+            <TabsTrigger value="api" className="gap-2"><Key className="w-4 h-4" />API Keys</TabsTrigger>
+            <TabsTrigger value="usage" className="gap-2"><BarChart3 className="w-4 h-4" />Usage</TabsTrigger>
           </TabsList>
 
-          {/* Profile Tab */}
           <TabsContent value="profile">
             <Card>
               <CardHeader>
                 <CardTitle>Profile Information</CardTitle>
-                <CardDescription>
-                  Update your personal and company details
-                </CardDescription>
+                <CardDescription>Update your personal and company details</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="fullName">Full Name</Label>
-                  <Input
-                    id="fullName"
-                    value={profile.full_name || ""}
-                    onChange={(e) => setProfile({ ...profile, full_name: e.target.value })}
-                    placeholder="John Doe"
-                  />
+                  <Input id="fullName" value={profile.full_name || ""} onChange={(e) => setProfile({ ...profile, full_name: e.target.value })} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="company">Company</Label>
-                  <Input
-                    id="company"
-                    value={profile.company || ""}
-                    onChange={(e) => setProfile({ ...profile, company: e.target.value })}
-                    placeholder="ACME Corp"
-                  />
+                  <Input id="company" value={profile.company || ""} onChange={(e) => setProfile({ ...profile, company: e.target.value })} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="role">Role</Label>
-                  <Input
-                    id="role"
-                    value={profile.role || ""}
-                    onChange={(e) => setProfile({ ...profile, role: e.target.value })}
-                    placeholder="Metallurgical Engineer"
-                  />
+                  <Input id="role" value={profile.role || ""} onChange={(e) => setProfile({ ...profile, role: e.target.value })} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
                   <Input id="email" value={user?.email || ""} disabled className="bg-muted" />
                 </div>
                 <Button onClick={handleSaveProfile} disabled={saving}>
-                  {saving ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    "Save Changes"
-                  )}
+                  {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : "Save Changes"}
                 </Button>
               </CardContent>
             </Card>
           </TabsContent>
 
-          {/* API Keys Tab */}
           <TabsContent value="api">
             <Card>
               <CardHeader>
                 <CardTitle>API Keys</CardTitle>
-                <CardDescription>
-                  Generate and manage API keys for external integrations
-                </CardDescription>
+                <CardDescription>Manage keys for external integrations</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                {/* Generate New Key */}
                 <div className="flex gap-4">
-                  <Input
-                    placeholder="Key name (e.g., Production)"
-                    value={newKeyName}
-                    onChange={(e) => setNewKeyName(e.target.value)}
-                    className="flex-1"
-                  />
+                  <Input placeholder="Key name" value={newKeyName} onChange={(e) => setNewKeyName(e.target.value)} />
                   <Button onClick={handleGenerateApiKey} disabled={generatingKey}>
-                    {generatingKey ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      "Generate Key"
-                    )}
+                    {generatingKey ? <Loader2 className="w-4 h-4 animate-spin" /> : "Generate"}
                   </Button>
                 </div>
-
-                {/* Existing Keys */}
                 <div className="space-y-3">
-                  {apiKeys.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-6">
-                      No API keys generated yet.
-                    </p>
-                  ) : (
-                    apiKeys.map((key) => (
-                      <div
-                        key={key.id}
-                        className={`flex items-center justify-between p-4 rounded-lg border ${
-                          key.revoked_at ? "bg-muted/50 opacity-60" : "bg-card"
-                        }`}
-                      >
-                        <div>
-                          <p className="font-medium">{key.name}</p>
-                          <p className="text-sm text-muted-foreground font-mono">
-                            {key.key_preview}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {key.revoked_at ? (
-                            <span className="text-sm text-destructive">Revoked</span>
-                          ) : (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleRevokeKey(key.id)}
-                            >
-                              <Trash2 className="w-4 h-4 text-destructive" />
-                            </Button>
-                          )}
-                        </div>
+                  {apiKeys.map((key) => (
+                    <div key={key.id} className={`flex items-center justify-between p-4 rounded-lg border ${key.revoked_at ? "bg-muted/50" : "bg-card"}`}>
+                      <div>
+                        <p className="font-medium">{key.name}</p>
+                        <p className="text-sm font-mono">{key.key_preview}</p>
                       </div>
-                    ))
-                  )}
+                      {!key.revoked_at && (
+                        <Button variant="ghost" size="sm" onClick={() => handleRevokeKey(key.id)}>
+                          <Trash2 className="w-4 h-4 text-destructive" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
 
-          {/* Usage Tab */}
           <TabsContent value="usage">
             <Card>
               <CardHeader>
                 <CardTitle>Usage Tracker</CardTitle>
-                <CardDescription>
-                  Monitor your redesign quota and usage
-                </CardDescription>
+                <CardDescription>Monitor your redesign quota</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium">Redesigns Used</span>
                     <span className="text-sm text-muted-foreground">
-                      {projectCount} / {maxProjects}
+                      {usageCount} / {maxProjects}
                     </span>
                   </div>
-                  <Progress value={(projectCount / maxProjects) * 100} className="h-3" />
+                  {/* PROGRESS BAR NOW USES LIVE DATABASE COUNT */}
+                  <Progress value={(usageCount / maxProjects) * 100} className="h-3" />
                   <p className="text-sm text-muted-foreground">
-                    {maxProjects - projectCount} redesigns remaining this month
+                    {Math.max(0, maxProjects - usageCount)} redesigns remaining this month
                   </p>
                 </div>
-
                 <div className="p-4 bg-muted rounded-lg">
                   <h4 className="font-medium mb-2">Current Plan: Free</h4>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Includes {maxProjects} redesigns per month with basic features.
-                  </p>
-                  <Button variant="outline" size="sm">
-                    Upgrade Plan
-                  </Button>
+                  <p className="text-sm text-muted-foreground mb-4">Includes {maxProjects} redesigns per month.</p>
+                  <Button variant="outline" size="sm">Upgrade Plan</Button>
                 </div>
               </CardContent>
             </Card>
