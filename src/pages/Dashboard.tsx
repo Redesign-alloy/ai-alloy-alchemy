@@ -28,17 +28,25 @@ const Dashboard = () => {
     setCurrentInput(data);
     setStatus("processing");
 
-    try {
-      const response = await fetch(
+   // REPLACE LINES 33-41 WITH THIS:
+try {
+    // Construct the payload to include User ID and Email
+    const payload = {
+        ...data,             // This spreads all your existing alloy input data
+        user_id: user?.id,    // Adds the Supabase User ID
+        email: user?.email    // Adds the User Email
+    };
+
+    const response = await fetch(
         "https://tejanaidu4.app.n8n.cloud/webhook/redesign-alloy",
         {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(data),
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(payload), // Send the new payload instead of just 'data'
         }
-      );
+    );
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: "Unknown error" }));
