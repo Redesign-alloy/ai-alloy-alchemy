@@ -9,6 +9,7 @@ import { AlloyData, AlloyResult } from "@/types/alloy";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 
 type ProcessingStatus = "idle" | "processing" | "success" | "error";
 
@@ -81,8 +82,8 @@ const Dashboard = () => {
         user_id: user.id,
         name: `${currentInput.original_alloy.name} Redesign`,
         base_alloy: currentInput.original_alloy.name,
-        input_data: currentInput as unknown as Record<string, unknown>,
-        result_data: result as unknown as Record<string, unknown>,
+        input_data: currentInput as unknown as Json,
+        result_data: result as unknown as Json,
         performance_gain: performanceGain,
         cost_delta: costDelta,
         status: "completed",
