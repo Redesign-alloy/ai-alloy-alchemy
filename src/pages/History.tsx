@@ -25,13 +25,9 @@ import { format } from "date-fns";
 
 interface Project {
   id: string;
-  name: string;
-  base_alloy: string;
-  input_data: unknown;
-  result_data: unknown;
-  performance_gain: number | null;
-  cost_delta: number | null;
-  status: string | null;
+  user_id: string;
+  alloy_name: string; // Changed from name/base_alloy
+  redesigned_data: any; // Changed from result_data
   created_at: string;
 }
 
@@ -50,32 +46,34 @@ const History = () => {
     }
   }, [user]);
 
-  const fetchProjects = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("projects")
-        .select("*")
-        .order("created_at", { ascending: false });
+  // REPLACE LINES 48-66 WITH THIS:
+const fetchProjects = async () => {
+  try {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("alloy_data") // Use your actual table name
+      .select("*")
+      .eq("user_id", user?.id) // Filter so users only see their own data
+      .order("created_at", { ascending: false });
 
-      if (error) throw error;
-      setProjects(data || []);
-    } catch (error) {
-      console.error("Error fetching projects:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load project history.",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+    if (error) throw error;
+    setProjects(data || []);
+  } catch (error) {
+    console.error("Error fetching projects:", error);
+    toast({
+      title: "Error",
+      description: "Could not connect to alloy_data table.",
+      variant: "destructive",
+    });
+  } finally {
+    setLoading(false);
+  }
+};
 
-  const filteredProjects = projects.filter(
-    (project) =>
-      project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      project.base_alloy.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // REPLACE LINES 68-72 WITH THIS:
+const filteredProjects = projects.filter((project) =>
+  project.alloy_name?.toLowerCase().includes(searchQuery.toLowerCase())
+);
 
   const handleViewReport = (project: Project) => {
     setSelectedProject(project);
@@ -159,51 +157,34 @@ const History = () => {
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="w-8 h-8 animate-spin text-primary" />
               </div>
-            ) : filteredProjects.length === 0 ? (
-              <div className="text-center py-12">
-                <HistoryIcon className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-foreground mb-2">No projects yet</h3>
-                <p className="text-muted-foreground">
-                  Your saved alloy analyses will appear here.
-                </p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Project Name</TableHead>
-                      <TableHead>Base Alloy</TableHead>
-                      <TableHead>Performance Gain</TableHead>
-                      <TableHead>Cost Delta</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredProjects.map((project) => (
-                      <TableRow key={project.id}>
-                        <TableCell className="font-mono text-sm">
-                          {format(new Date(project.created_at), "MMM dd, yyyy")}
-                        </TableCell>
-                        <TableCell className="font-medium">{project.name}</TableCell>
-                        <TableCell>{project.base_alloy}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            {getPerformanceIcon(project.performance_gain)}
-                            <span
-                              className={
-                                project.performance_gain && project.performance_gain > 0
-                                  ? "text-success"
-                                  : project.performance_gain && project.performance_gain < 0
-                                  ? "text-destructive"
-                                  : ""
-                              }
-                            >
-                              {project.performance_gain !== null
-                                ? `${project.performance_gain.toFixed(1)}%`
-                                : "N/A"}
-                            </span>
+           // REPLACE TABLE BODY CONTENT (LINES 160-205) WITH THIS:
+<TableBody>
+  {filteredProjects.map((project) => (
+    <TableRow key={project.id}>
+      <TableCell className="font-mono text-sm">
+        {format(new Date(project.created_at), "MMM dd, yyyy")}
+      </TableCell>
+      <TableCell className="font-medium">{project.alloy_name}</TableCell>
+      <TableCell>
+        {/* If redesigned_data is stored as a string, we parse it */}
+        <span className="text-success font-semibold">
+          Optimized
+        </span>
+      </TableCell>
+      <TableCell className="text-right">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => handleViewReport(project)}
+          className="gap-2"
+        >
+          <Eye className="w-4 h-4" />
+          View Data
+        </Button>
+      </TableCell>
+    </TableRow>
+  ))}
+</TableBody>
                           </div>
                         </TableCell>
                         <TableCell>
@@ -243,47 +224,24 @@ const History = () => {
 
         {/* Report Dialog */}
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>{selectedProject?.name}</DialogTitle>
-            </DialogHeader>
-            {selectedProject && (
-              <div className="space-y-6">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="p-4 bg-muted rounded-lg">
-                    <p className="text-sm text-muted-foreground">Base Alloy</p>
-                    <p className="text-lg font-semibold">{selectedProject.base_alloy}</p>
-                  </div>
-                  <div className="p-4 bg-muted rounded-lg">
-                    <p className="text-sm text-muted-foreground">Date</p>
-                    <p className="text-lg font-semibold">
-                      {format(new Date(selectedProject.created_at), "MMMM dd, yyyy")}
-                    </p>
-                  </div>
-                  <div className="p-4 bg-muted rounded-lg">
-                    <p className="text-sm text-muted-foreground">Performance Gain</p>
-                    <p className={`text-lg font-semibold ${selectedProject.performance_gain && selectedProject.performance_gain > 0 ? 'text-success' : ''}`}>
-                      {selectedProject.performance_gain?.toFixed(2)}%
-                    </p>
-                  </div>
-                  <div className="p-4 bg-muted rounded-lg">
-                    <p className="text-sm text-muted-foreground">Cost Delta</p>
-                    <p className={`text-lg font-semibold ${selectedProject.cost_delta && selectedProject.cost_delta < 0 ? 'text-success' : 'text-destructive'}`}>
-                      {selectedProject.cost_delta && selectedProject.cost_delta > 0 ? '+' : ''}{selectedProject.cost_delta?.toFixed(2)}%
-                    </p>
-                  </div>
-                </div>
+          // REPLACE DIALOG CONTENT (LINES 214-245) WITH THIS:
+<DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+  <DialogHeader>
+    <DialogTitle>Analysis for {selectedProject?.alloy_name}</DialogTitle>
+  </DialogHeader>
+  {selectedProject && (
+    <div className="space-y-6">
+      <div className="p-4 bg-muted rounded-lg">
+        <p className="text-sm text-muted-foreground mb-2">Redesign Parameters</p>
+        <pre className="text-xs overflow-x-auto p-4 bg-card rounded border whitespace-pre-wrap">
+          {typeof selectedProject.redesigned_data === 'string' 
+            ? selectedProject.redesigned_data 
+            : JSON.stringify(selectedProject.redesigned_data, null, 2)}
+        </pre>
+      </div>
+    </div>
+  )}
 
-                {selectedProject.result_data && (
-                  <div className="p-4 bg-muted rounded-lg">
-                    <p className="text-sm text-muted-foreground mb-2">Result Data</p>
-                    <pre className="text-xs overflow-x-auto p-4 bg-card rounded border">
-                      {JSON.stringify(selectedProject.result_data, null, 2)}
-                    </pre>
-                  </div>
-                )}
-              </div>
-            )}
           </DialogContent>
         </Dialog>
       </div>
