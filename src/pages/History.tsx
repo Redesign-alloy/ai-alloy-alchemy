@@ -23,13 +23,18 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 
-// 1. Updated Interface to match your alloy_data table exactly
 interface Project {
   id: string;
   user_id: string;
-  alloy_name: string;      // Matches image_a94683.png
-  redesigned_data: any;    // Matches image_a94683.png
+  name: string;
+  base_alloy: string;
+  input_data: unknown;
+  result_data: unknown;
+  status: string | null;
+  performance_gain: number | null;
+  cost_delta: number | null;
   created_at: string;
+  updated_at: string;
 }
 
 const History = () => {
@@ -47,12 +52,11 @@ const History = () => {
     }
   }, [user]);
 
-  // 2. Updated Fetch to point to alloy_data
   const fetchProjects = async () => {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from("alloy_data")
+        .from("projects")
         .select("*")
         .eq("user_id", user?.id)
         .order("created_at", { ascending: false });
@@ -71,17 +75,20 @@ const History = () => {
     }
   };
 
-  // 3. Updated Filter to use alloy_name
   const filteredProjects = projects.filter((project) =>
-    project.alloy_name?.toLowerCase().includes(searchQuery.toLowerCase())
+    project.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    project.base_alloy?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // 4. Updated CSV Export to use existing columns
   const handleExportCSV = () => {
-    const headers = ["Date", "Alloy Name"];
+    const headers = ["Date", "Project Name", "Base Alloy", "Status", "Performance Gain", "Cost Delta"];
     const rows = filteredProjects.map((p) => [
       format(new Date(p.created_at), "yyyy-MM-dd"),
-      p.alloy_name,
+      p.name,
+      p.base_alloy,
+      p.status || "N/A",
+      p.performance_gain ? `${p.performance_gain}%` : "N/A",
+      p.cost_delta ? `${p.cost_delta}%` : "N/A",
     ]);
 
     const csvContent = [headers, ...rows].map((row) => row.join(",")).join("\n");
@@ -112,7 +119,7 @@ const History = () => {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                placeholder="Search by alloy name..."
+                placeholder="Search by project name or base alloy..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10"
@@ -136,6 +143,7 @@ const History = () => {
               <div className="text-center py-12">
                 <HistoryIcon className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-foreground mb-2">No projects yet</h3>
+                <p className="text-muted-foreground">Your saved alloy redesigns will appear here.</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -143,7 +151,10 @@ const History = () => {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Date</TableHead>
-                      <TableHead>Alloy Name</TableHead>
+                      <TableHead>Project Name</TableHead>
+                      <TableHead>Base Alloy</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Performance</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -151,7 +162,24 @@ const History = () => {
                     {filteredProjects.map((project) => (
                       <TableRow key={project.id}>
                         <TableCell>{format(new Date(project.created_at), "MMM dd, yyyy")}</TableCell>
-                        <TableCell className="font-medium">{project.alloy_name}</TableCell>
+                        <TableCell className="font-medium">{project.name}</TableCell>
+                        <TableCell>{project.base_alloy}</TableCell>
+                        <TableCell>
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            project.status === 'completed' 
+                              ? 'bg-success/10 text-success' 
+                              : 'bg-muted text-muted-foreground'
+                          }`}>
+                            {project.status || 'pending'}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          {project.performance_gain ? (
+                            <span className="text-success font-medium">+{project.performance_gain}%</span>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
                         <TableCell className="text-right">
                           <Button variant="ghost" size="sm" onClick={() => { setSelectedProject(project); setIsDialogOpen(true); }}>
                             <Eye className="w-4 h-4 mr-2" /> View Report
@@ -169,12 +197,25 @@ const History = () => {
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Details for {selectedProject?.alloy_name}</DialogTitle>
+              <DialogTitle>Details for {selectedProject?.name}</DialogTitle>
             </DialogHeader>
-            <div className="p-4 bg-muted rounded-lg">
-              <pre className="text-xs overflow-x-auto whitespace-pre-wrap">
-                {JSON.stringify(selectedProject?.redesigned_data, null, 2)}
-              </pre>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-4 bg-muted rounded-lg">
+                  <div className="text-sm text-muted-foreground mb-1">Base Alloy</div>
+                  <div className="font-medium">{selectedProject?.base_alloy}</div>
+                </div>
+                <div className="p-4 bg-muted rounded-lg">
+                  <div className="text-sm text-muted-foreground mb-1">Status</div>
+                  <div className="font-medium">{selectedProject?.status || 'pending'}</div>
+                </div>
+              </div>
+              <div className="p-4 bg-muted rounded-lg">
+                <div className="text-sm text-muted-foreground mb-2">Result Data</div>
+                <pre className="text-xs overflow-x-auto whitespace-pre-wrap">
+                  {JSON.stringify(selectedProject?.result_data, null, 2)}
+                </pre>
+              </div>
             </div>
           </DialogContent>
         </Dialog>

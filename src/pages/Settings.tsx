@@ -35,7 +35,7 @@ const Settings = () => {
   const [newKeyName, setNewKeyName] = useState("");
   const [generatingKey, setGeneratingKey] = useState(false);
   
-  // NEW: Usage state linked to your database search_count
+  // Usage state - count projects created by user
   const [usageCount, setUsageCount] = useState(0);
   const maxProjects = 50;
 
@@ -43,7 +43,7 @@ const Settings = () => {
     if (user) {
       fetchProfile();
       fetchApiKeys();
-      fetchUsageCount(); // Updated function name
+      fetchUsageCount();
     }
   }, [user]);
 
@@ -69,6 +69,7 @@ const Settings = () => {
       const { data, error } = await supabase
         .from("api_keys")
         .select("id, name, key_preview, created_at, revoked_at")
+        .eq("user_id", user?.id)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -78,18 +79,16 @@ const Settings = () => {
     }
   };
 
-  // UPDATED: Now fetches the search_count from your 'users' table
+  // Count projects created by user as usage metric
   const fetchUsageCount = async () => {
     try {
-      const { data, error } = await supabase
-        .from("users")
-        .select("search_count")
-        .eq("id", user?.id)
-        .single();
+      const { count, error } = await supabase
+        .from("projects")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", user?.id);
 
       if (error) throw error;
-      // Handle NULL values seen in your database
-      setUsageCount(data?.search_count || 0);
+      setUsageCount(count || 0);
     } catch (error) {
       console.error("Error fetching usage count:", error);
     }
@@ -98,16 +97,39 @@ const Settings = () => {
   const handleSaveProfile = async () => {
     setSaving(true);
     try {
-      const { error } = await supabase
+      // Check if profile exists first
+      const { data: existingProfile } = await supabase
         .from("profiles")
-        .update({
-          full_name: profile.full_name,
-          company: profile.company,
-          role: profile.role,
-        })
-        .eq("user_id", user?.id);
+        .select("id")
+        .eq("user_id", user?.id)
+        .single();
 
-      if (error) throw error;
+      if (existingProfile) {
+        // Update existing profile
+        const { error } = await supabase
+          .from("profiles")
+          .update({
+            full_name: profile.full_name,
+            company: profile.company,
+            role: profile.role,
+          })
+          .eq("user_id", user?.id);
+
+        if (error) throw error;
+      } else {
+        // Insert new profile
+        const { error } = await supabase
+          .from("profiles")
+          .insert({
+            user_id: user?.id,
+            full_name: profile.full_name,
+            company: profile.company,
+            role: profile.role,
+          });
+
+        if (error) throw error;
+      }
+      
       toast({ title: "Profile Updated", description: "Saved successfully." });
     } catch (error) {
       console.error("Error saving profile:", error);
@@ -222,19 +244,26 @@ const Settings = () => {
                   </Button>
                 </div>
                 <div className="space-y-3">
-                  {apiKeys.map((key) => (
-                    <div key={key.id} className={`flex items-center justify-between p-4 rounded-lg border ${key.revoked_at ? "bg-muted/50" : "bg-card"}`}>
-                      <div>
-                        <p className="font-medium">{key.name}</p>
-                        <p className="text-sm font-mono">{key.key_preview}</p>
-                      </div>
-                      {!key.revoked_at && (
-                        <Button variant="ghost" size="sm" onClick={() => handleRevokeKey(key.id)}>
-                          <Trash2 className="w-4 h-4 text-destructive" />
-                        </Button>
-                      )}
+                  {apiKeys.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <Key className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                      <p>No API keys yet. Generate one above.</p>
                     </div>
-                  ))}
+                  ) : (
+                    apiKeys.map((key) => (
+                      <div key={key.id} className={`flex items-center justify-between p-4 rounded-lg border ${key.revoked_at ? "bg-muted/50" : "bg-card"}`}>
+                        <div>
+                          <p className="font-medium">{key.name}</p>
+                          <p className="text-sm font-mono">{key.key_preview}</p>
+                        </div>
+                        {!key.revoked_at && (
+                          <Button variant="ghost" size="sm" onClick={() => handleRevokeKey(key.id)}>
+                            <Trash2 className="w-4 h-4 text-destructive" />
+                          </Button>
+                        )}
+                      </div>
+                    ))
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -254,7 +283,6 @@ const Settings = () => {
                       {usageCount} / {maxProjects}
                     </span>
                   </div>
-                  {/* PROGRESS BAR NOW USES LIVE DATABASE COUNT */}
                   <Progress value={(usageCount / maxProjects) * 100} className="h-3" />
                   <p className="text-sm text-muted-foreground">
                     {Math.max(0, maxProjects - usageCount)} redesigns remaining this month

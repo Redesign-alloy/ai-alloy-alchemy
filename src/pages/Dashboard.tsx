@@ -183,7 +183,7 @@ try {
         {/* Main Content */}
         <div className="grid lg:grid-cols-2 gap-8 mt-8">
           <AlloyForm onSubmit={handleSubmit} isLoading={isLoading} />
-          <ResultsDisplay result={result} isLoading={isLoading} />
+          <ResultsDisplay result={result} isLoading={isLoading} inputData={currentInput} />
         </div>
       </div>
     </AppLayout>

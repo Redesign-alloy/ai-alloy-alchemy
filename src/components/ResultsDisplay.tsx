@@ -1,4 +1,4 @@
-import { AlloyResult, AchievedImprovement } from "@/types/alloy";
+import { AlloyResult, AchievedImprovement, AlloyData } from "@/types/alloy";
 import { CheckCircle2, Loader2, Clock, TrendingUp, Flame, Droplets, Thermometer, Timer, MessageCircle, Send, IndianRupee, CheckCircle, XCircle, AlertCircle } from "lucide-react";
 import { useEffect, useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,13 +7,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { calculateCompositionCostFromObject } from "@/lib/elementPrices";
+import { PropertyAnalysis } from "@/components/PropertyAnalysis";
 
 interface ResultsDisplayProps {
   result: AlloyResult | null;
   isLoading: boolean;
+  inputData?: AlloyData | null;
 }
 
-export const ResultsDisplay = ({ result, isLoading }: ResultsDisplayProps) => {
+export const ResultsDisplay = ({ result, isLoading, inputData }: ResultsDisplayProps) => {
   const { toast } = useToast();
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [userQuestion, setUserQuestion] = useState("");
@@ -623,6 +625,9 @@ export const ResultsDisplay = ({ result, isLoading }: ResultsDisplayProps) => {
           </CardContent>
         </Card>
       )}
+
+      {/* Section 7: Property Analysis - Ashby Plot & TTT Diagram */}
+      <PropertyAnalysis result={result} inputData={inputData} />
 
 
       {/* Section 7: Ask the Metallurgical AI */}
