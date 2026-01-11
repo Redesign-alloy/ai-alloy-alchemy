@@ -124,9 +124,7 @@ export const AlloyForm = ({ onSubmit, isLoading }: AlloyFormProps) => {
     );
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-
+  const handleRedesign = () => {
     const compositionObj: { [key: string]: number | string } = {};
     composition.forEach(({ element, value }) => {
       if (element && value) {
@@ -188,7 +186,7 @@ export const AlloyForm = ({ onSubmit, isLoading }: AlloyFormProps) => {
         </CardTitle>
       </CardHeader>
       <CardContent className="pt-6">
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={(e) => e.preventDefault()} className="space-y-6">
           {/* Alloy Name */}
           <div>
             <Label htmlFor="alloyName">Alloy Name</Label>
@@ -388,10 +386,11 @@ export const AlloyForm = ({ onSubmit, isLoading }: AlloyFormProps) => {
           </div>
 
           <Button
-            type="submit"
+            type="button"
             className="w-full"
             size="lg"
             disabled={isLoading}
+            onClick={handleRedesign}
           >
             {isLoading ? "Analyzing..." : "Redesign Alloy"}
           </Button>
