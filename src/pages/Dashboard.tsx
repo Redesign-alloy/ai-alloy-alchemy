@@ -16,7 +16,7 @@ type ProcessingStatus = "idle" | "processing" | "success" | "error";
 const Dashboard = () => {
   const { toast } = useToast();
   const { user } = useAuth();
-  const [result, setResult] = useState<AlloyResult | null>(null);
+  const [result, setResult] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [currentInput, setCurrentInput] = useState<AlloyData | null>(null);
@@ -28,34 +28,38 @@ const Dashboard = () => {
     setCurrentInput(data);
     setStatus("processing");
 
-   // REPLACE LINES 33-41 WITH THIS:
-try {
-    // Construct the payload to include User ID and Email
-    const payload = {
-        ...data,             // This spreads all your existing alloy input data
-        user_id: user?.id,    // Adds the Supabase User ID
-        email: user?.email    // Adds the User Email
-    };
+    try {
+      const payload = {
+        ...data,
+        user_id: user?.id,
+        email: user?.email
+      };
 
-    const response = await fetch(
+      const response = await fetch(
         "https://tejanaidu5.app.n8n.cloud/webhook/redesign-alloy",
         {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify(payload), // Send the new payload instead of just 'data'
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
         }
-    );
+      );
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: "Unknown error" }));
         throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
       }
 
-      const resultData = await response.json();
-      setResult(resultData);
-      setStatus("success");
+      const resultData: APIResponse = await response.json();
+      
+      // Check for success status
+      if (resultData.status === "success" || resultData.data) {
+        setResult(resultData);
+        setStatus("success");
+      } else {
+        throw new Error("Invalid response format");
+      }
     } catch (error) {
       console.error("Error submitting alloy data:", error);
       setStatus("error");
@@ -83,8 +87,11 @@ try {
     setIsSaving(true);
 
     try {
-      const performanceGain = result.analysis_summary?.performance_gain_percent || 0;
-      const costDelta = result.analysis_summary?.cost_change_percent || 0;
+      // Use new data structure
+      const performanceGain = result.data?.summary?.performance_gain_percent || 
+                              result.data?.redesign_results?.analysis_summary?.performance_gain_percent || 0;
+      const costDelta = result.data?.summary?.cost_change_percent || 
+                        result.data?.redesign_results?.analysis_summary?.cost_change_percent || 0;
 
       const { error } = await supabase.from("projects").insert([{
         user_id: user.id,
@@ -143,6 +150,28 @@ try {
 
   return (
     <AppLayout>
+      {/* Full-screen Loading Overlay */}
+      {isLoading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+          <div className="text-center space-y-6 p-8 rounded-2xl bg-card border border-border shadow-2xl">
+            <div className="relative">
+              <div className="w-20 h-20 rounded-full border-4 border-primary/20 mx-auto flex items-center justify-center">
+                <Loader2 className="w-10 h-10 text-primary animate-spin" />
+              </div>
+              <div className="absolute inset-0 w-20 h-20 mx-auto rounded-full border-4 border-transparent border-t-primary animate-spin" style={{ animationDuration: '1.5s' }} />
+            </div>
+            <div>
+              <h3 className="text-xl font-semibold text-foreground mb-2">Analyzing Your Alloy</h3>
+              <p className="text-muted-foreground">Our AI is optimizing your composition...</p>
+            </div>
+            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+              <Clock className="w-4 h-4" />
+              <span>This may take a moment</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="p-6 lg:p-8 max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
