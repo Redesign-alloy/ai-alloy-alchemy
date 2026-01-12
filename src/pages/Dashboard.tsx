@@ -28,65 +28,54 @@ const Dashboard = () => {
   const [currentInput, setCurrentInput] = useState<AlloyData | null>(null);
   const [status, setStatus] = useState<ProcessingStatus>("idle");
 
-  const handleSubmit = async (data: AlloyData) => {
-    setIsLoading(true);
-    setResult(null);
-    setCurrentInput(data);
-    setStatus("processing");
 
-    try {
-      const payload = {
-        ...data,
-        user_id: user?.id,
-        email: user?.email
-      };
+const handleSubmit = async (data: AlloyData) => {
+  setIsLoading(true);
+  setResult(null);
+  setCurrentInput(data);
+  setStatus("processing");
 
-      const response = await fetch(
-        "https://tejanaidu5.app.n8n.cloud/webhook/redesign-alloy",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        }
-      );
+  try {
+    const payload = {
+      ...data,
+      user_id: user?.id,
+      email: user?.email
+    };
 
-      // Check for empty or non-ok responses before parsing
-      if (!response.ok) {
-        throw new Error(`Server returned status: ${response.status}`);
+    const response = await fetch(
+      "https://tejanaidu5.app.n8n.cloud/webhook/redesign-alloy",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       }
+    );
 
-      const rawResponse = await response.text();
-      if (!rawResponse) throw new Error("Empty response received from server");
-
-      const resultData: APIResponse = JSON.parse(rawResponse);
-      
-      // Robustly handle stringified 'data' fields
-      if (typeof resultData.data === 'string') {
-        try {
-          resultData.data = JSON.parse(resultData.data);
-        } catch (e) {
-          console.warn("Could not parse nested data string, keeping as is.");
-        }
-      }
-
-      if (resultData.status === "success" || resultData.data) {
-        setResult(resultData);
-        setStatus("success");
-      } else {
-        throw new Error("Invalid response format received.");
-      }
-    } catch (error) {
-      console.error("Submission error:", error);
-      setStatus("error");
-      toast({
-        title: "Analysis Failed",
-        description: error instanceof Error ? error.message : "Failed to connect to API",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
+    if (!response.ok) {
+      throw new Error(`Server returned status: ${response.status}`);
     }
-  };
+
+    const resultData: APIResponse = await response.json();
+    
+    // BACKEND SYNC: The backend now returns data.redesigned_alloy as a nested object
+    if (resultData.status === "success" && resultData.data) {
+      setResult(resultData);
+      setStatus("success");
+    } else {
+      throw new Error("Invalid response format: 'data' or 'status' missing.");
+    }
+  } catch (error) {
+    console.error("Submission error:", error);
+    setStatus("error");
+    toast({
+      title: "Analysis Failed",
+      description: error instanceof Error ? error.message : "Failed to connect to API",
+      variant: "destructive",
+    });
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   const handleSaveProject = async () => {
     if (!result || !currentInput || !user) return;
