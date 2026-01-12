@@ -11,8 +11,11 @@ import { PropertyAnalysis } from "@/components/PropertyAnalysis";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ApiResult = any;
+
 interface ResultsDisplayProps {
-  result: any;
+  result: ApiResult;
   isLoading: boolean;
   inputData?: AlloyData | null;
 }

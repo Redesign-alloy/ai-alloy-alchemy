@@ -24,9 +24,12 @@ import {
 } from "recharts";
 import { TrendingUp, Thermometer, Star } from "lucide-react";
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ApiResult = any;
+
 interface PropertyAnalysisProps {
-  result: any;
-  inputData?: any;
+  result: ApiResult;
+  inputData?: ApiResult;
 }
 
 interface PropertyOption {

@@ -5,13 +5,35 @@ import { ExampleSelector } from "@/components/ExampleSelector";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Save, Loader2, CheckCircle, XCircle, Clock } from "lucide-react";
-import { AlloyData, AlloyResult } from "@/types/alloy";
+import { AlloyData } from "@/types/alloy";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 
 type ProcessingStatus = "idle" | "processing" | "success" | "error";
+
+// API Response type definition
+interface APIResponse {
+  status?: string;
+  data?: {
+    redesign_results?: Record<string, unknown>;
+    composition?: Array<{ element: string; percentage: number }>;
+    properties?: Record<string, unknown>;
+    ashby_data?: Array<Record<string, unknown>>;
+    ttt_data?: {
+      curve?: Array<Record<string, unknown>>;
+      cooling?: Array<Record<string, unknown>>;
+    };
+    summary?: {
+      remarks?: string;
+      performance_gain_percent?: number;
+      cost_change_percent?: number;
+    };
+  };
+  final_output?: Record<string, unknown>;
+  value?: Array<{ final_output?: Record<string, unknown> }>;
+}
 
 const Dashboard = () => {
   const { toast } = useToast();
