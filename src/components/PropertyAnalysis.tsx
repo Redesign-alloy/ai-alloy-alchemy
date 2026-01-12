@@ -104,16 +104,22 @@ export const PropertyAnalysis = ({ result, inputData }: PropertyAnalysisProps) =
   const xAxisOption = availableProperties.find(p => p.key === xAxisProperty) || availableProperties[0];
   const yAxisOption = availableProperties.find(p => p.key === yAxisProperty) || availableProperties[1];
 
-  // Extract chart data - prefer new format ashby_data
+  // Extract chart data - specifically mapping the backend 'ashby' data
   const chartData = useMemo(() => {
-    // Check for new format ashby_data
-    if (apiData?.ashby_data && Array.isArray(apiData.ashby_data)) {
-      return apiData.ashby_data.map((point: any) => ({
+    // Look in the new structure: result.data.ashby
+    const rawAshby = result?.data?.ashby || apiData?.ashby || [];
+    
+    if (Array.isArray(rawAshby) && rawAshby.length > 0) {
+      return rawAshby.map((point: any) => ({
         ...point,
-        [xAxisProperty]: point.x ?? point[xAxisProperty],
-        [yAxisProperty]: point.y ?? point[yAxisProperty],
+        // Ensure the chart uses the dynamically selected properties for the axes
+        [xAxisProperty]: point.x,
+        [yAxisProperty]: point.y,
       }));
     }
+
+    return [];
+  }, [result, apiData, xAxisProperty, yAxisProperty]);
     
     // Legacy format
     if (finalOutput?.chartData && Array.isArray(finalOutput.chartData)) {
