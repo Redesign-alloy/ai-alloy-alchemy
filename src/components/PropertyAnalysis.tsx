@@ -22,7 +22,7 @@ import {
   Cell,
   ReferenceLine,
 } from "recharts";
-import { TrendingUp, Thermometer } from "lucide-react";
+import { TrendingUp, Thermometer, Star } from "lucide-react";
 
 interface PropertyAnalysisProps {
   result: any;
@@ -36,52 +36,63 @@ interface PropertyOption {
 }
 
 export const PropertyAnalysis = ({ result, inputData }: PropertyAnalysisProps) => {
-  // Extract available properties from result and input
+  // Extract API data from new format
+  const apiData = result?.data;
+  const redesignResults = apiData?.redesign_results;
+  const finalOutput = result?.final_output || result?.value?.[0]?.final_output || redesignResults;
+
+  // Extract available properties dynamically from result and input
   const availableProperties = useMemo((): PropertyOption[] => {
     const properties: PropertyOption[] = [];
+    const seenKeys = new Set<string>();
     
-    // Try to extract from result's predicted properties
-    const finalOutput = result?.final_output || result?.value?.[0]?.final_output || result;
+    // Get properties from new format
+    const apiProperties = apiData?.properties || {};
     const predictedProps = finalOutput?.redesigned_alloy?.predicted_properties || {};
     const originalProps = inputData?.original_alloy?.properties || {};
     
-    // Add standard properties
-    const standardProps: PropertyOption[] = [
-      { key: "yield_strength", label: "Yield Strength", unit: "MPa" },
-      { key: "tensile_strength", label: "Tensile Strength", unit: "MPa" },
-      { key: "estimated_cost", label: "Estimated Cost", unit: "$/kg" },
-      { key: "density", label: "Density", unit: "g/cm³" },
-      { key: "youngs_modulus", label: "Young's Modulus", unit: "GPa" },
-      { key: "hardness", label: "Hardness", unit: "HRC" },
-      { key: "elongation", label: "Elongation", unit: "%" },
-      { key: "impact_toughness", label: "Impact Toughness", unit: "J" },
-    ];
-    
-    // Add properties from predicted props
-    Object.keys(predictedProps).forEach((key) => {
-      const existing = standardProps.find(p => 
-        p.key === key || p.label.toLowerCase().replace(/\s+/g, '_') === key.toLowerCase()
-      );
-      if (!existing) {
-        const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-        properties.push({ key, label, unit: "" });
+    // Helper to add property if not seen
+    const addProperty = (key: string, label: string, unit: string) => {
+      const normalizedKey = key.toLowerCase().replace(/\s+/g, '_');
+      if (!seenKeys.has(normalizedKey)) {
+        seenKeys.add(normalizedKey);
+        properties.push({ key: normalizedKey, label, unit });
       }
+    };
+    
+    // Add standard properties
+    addProperty("yield_strength", "Yield Strength", "MPa");
+    addProperty("tensile_strength", "Tensile Strength", "MPa");
+    addProperty("estimated_cost", "Estimated Cost", "$/kg");
+    addProperty("density", "Density", "g/cm³");
+    addProperty("youngs_modulus", "Young's Modulus", "GPa");
+    addProperty("hardness", "Hardness", "HRC");
+    addProperty("elongation", "Elongation", "%");
+    addProperty("impact_toughness", "Impact Toughness", "J");
+    
+    // Add properties from API response
+    Object.keys(apiProperties).forEach((key) => {
+      const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      addProperty(key, label, "");
+    });
+    
+    // Add from predicted props
+    Object.keys(predictedProps).forEach((key) => {
+      const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      addProperty(key, label, "");
     });
     
     // Add original properties if available
     if (originalProps.original_properties && Array.isArray(originalProps.original_properties)) {
       originalProps.original_properties.forEach((prop: any) => {
-        const existing = [...standardProps, ...properties].find(p => 
-          p.label.toLowerCase() === prop.name?.toLowerCase()
-        );
-        if (!existing && prop.name) {
-          properties.push({ key: prop.name.toLowerCase().replace(/\s+/g, '_'), label: prop.name, unit: prop.unit || "" });
+        if (prop.name) {
+          addProperty(prop.name, prop.name, prop.unit || "");
         }
       });
     }
     
-    return [...standardProps, ...properties];
-  }, [result, inputData]);
+    return properties;
+  }, [result, inputData, apiData, finalOutput]);
 
   const [xAxisProperty, setXAxisProperty] = useState<string>("yield_strength");
   const [yAxisProperty, setYAxisProperty] = useState<string>("estimated_cost");
@@ -90,11 +101,18 @@ export const PropertyAnalysis = ({ result, inputData }: PropertyAnalysisProps) =
   const xAxisOption = availableProperties.find(p => p.key === xAxisProperty) || availableProperties[0];
   const yAxisOption = availableProperties.find(p => p.key === yAxisProperty) || availableProperties[1];
 
-  // Extract chart data from result
+  // Extract chart data - prefer new format ashby_data
   const chartData = useMemo(() => {
-    const finalOutput = result?.final_output || result?.value?.[0]?.final_output || result;
+    // Check for new format ashby_data
+    if (apiData?.ashby_data && Array.isArray(apiData.ashby_data)) {
+      return apiData.ashby_data.map((point: any) => ({
+        ...point,
+        [xAxisProperty]: point.x ?? point[xAxisProperty],
+        [yAxisProperty]: point.y ?? point[yAxisProperty],
+      }));
+    }
     
-    // Check if backend provides chartData
+    // Legacy format
     if (finalOutput?.chartData && Array.isArray(finalOutput.chartData)) {
       return finalOutput.chartData;
     }
@@ -110,12 +128,12 @@ export const PropertyAnalysis = ({ result, inputData }: PropertyAnalysisProps) =
     ];
     
     // Add the redesigned alloy data if available
-    if (finalOutput?.redesigned_alloy) {
-      const redesigned = finalOutput.redesigned_alloy;
-      const predictedProps = redesigned.predicted_properties || {};
+    const redesignedAlloy = finalOutput?.redesigned_alloy;
+    if (redesignedAlloy) {
+      const predictedProps = redesignedAlloy.predicted_properties || apiData?.properties || {};
       
       const redesignData: any = {
-        name: redesigned.name || "Your Redesign",
+        name: redesignedAlloy.name || "Your Redesign",
         isRedesign: true,
       };
       
@@ -128,29 +146,40 @@ export const PropertyAnalysis = ({ result, inputData }: PropertyAnalysisProps) =
       });
       
       // Add estimated cost if available
-      if (redesigned.estimated_cost_per_kg) {
-        redesignData.estimated_cost = redesigned.estimated_cost_per_kg;
+      if (redesignedAlloy.estimated_cost_per_kg) {
+        redesignData.estimated_cost = redesignedAlloy.estimated_cost_per_kg;
       }
       
       referenceAlloys.push(redesignData);
     }
     
     return referenceAlloys;
-  }, [result]);
+  }, [result, apiData, finalOutput, xAxisProperty, yAxisProperty]);
 
-  // Extract TTT data from result
-  const tttData = useMemo(() => {
-    const finalOutput = result?.final_output || result?.value?.[0]?.final_output || result;
+  // Extract TTT data - prefer new format ttt_data
+  const { tttCurve, coolingCurve } = useMemo(() => {
+    // Check for new format ttt_data with curve and cooling
+    if (apiData?.ttt_data) {
+      return {
+        tttCurve: apiData.ttt_data.curve || [],
+        coolingCurve: apiData.ttt_data.cooling || [],
+      };
+    }
     
-    // Check if backend provides tttData
+    // Legacy format
     if (finalOutput?.tttData && Array.isArray(finalOutput.tttData)) {
-      return finalOutput.tttData;
+      return {
+        tttCurve: finalOutput.tttData,
+        coolingCurve: finalOutput.tttData.filter((d: any) => d.suggestedTemp !== undefined).map((d: any) => ({
+          time: d.time,
+          temp: d.suggestedTemp,
+        })),
+      };
     }
     
     // Generate sample TTT curve based on heat treatment data
     const heatTreatment = finalOutput?.redesigned_alloy?.heat_treatment_cycle;
     
-    // Sample TTT data points (time in seconds, temperature in °C)
     const baseTTTCurve = [
       { time: 1, temp: 700, phase: "Austenite" },
       { time: 10, temp: 650, phase: "Ferrite Start" },
@@ -162,23 +191,79 @@ export const PropertyAnalysis = ({ result, inputData }: PropertyAnalysisProps) =
       { time: 10000, temp: 350, phase: "Martensite" },
     ];
     
-    // Add suggested cooling rate line if heat treatment data is available
+    let coolingCurveData: any[] = [];
     if (heatTreatment) {
       const austenitizingTemp = parseFloat(String(heatTreatment.austenitizing_temp).replace(/[^\d]/g, '')) || 850;
       const coolingRate = heatTreatment.cooling_rate || "Fast";
-      
-      // Generate cooling curve based on rate
       const coolingMultiplier = coolingRate.toLowerCase().includes("fast") ? 0.5 : 
                                 coolingRate.toLowerCase().includes("slow") ? 2 : 1;
       
-      return baseTTTCurve.map(point => ({
-        ...point,
-        suggestedTemp: Math.max(200, austenitizingTemp - (Math.log10(point.time + 1) * 150 * coolingMultiplier)),
+      coolingCurveData = baseTTTCurve.map(point => ({
+        time: point.time,
+        temp: Math.max(200, austenitizingTemp - (Math.log10(point.time + 1) * 150 * coolingMultiplier)),
       }));
     }
     
-    return baseTTTCurve;
-  }, [result]);
+    return { tttCurve: baseTTTCurve, coolingCurve: coolingCurveData };
+  }, [result, apiData, finalOutput]);
+
+  // Merge TTT data for the chart
+  const mergedTTTData = useMemo(() => {
+    if (coolingCurve.length === 0) {
+      return tttCurve;
+    }
+    
+    // Merge curve and cooling data by time
+    const timeMap = new Map();
+    
+    tttCurve.forEach((point: any) => {
+      timeMap.set(point.time, { ...point });
+    });
+    
+    coolingCurve.forEach((point: any) => {
+      if (timeMap.has(point.time)) {
+        timeMap.get(point.time).coolingTemp = point.temp;
+      } else {
+        timeMap.set(point.time, { time: point.time, coolingTemp: point.temp });
+      }
+    });
+    
+    return Array.from(timeMap.values()).sort((a, b) => a.time - b.time);
+  }, [tttCurve, coolingCurve]);
+
+  // Custom scatter shape for redesign points (star)
+  const RedesignStar = (props: any) => {
+    const { cx, cy, payload } = props;
+    if (!payload.isRedesign) return null;
+    
+    return (
+      <g>
+        {/* Glow effect */}
+        <circle 
+          cx={cx} 
+          cy={cy} 
+          r={20} 
+          fill="hsl(var(--primary))" 
+          opacity={0.2}
+          className="animate-pulse"
+        />
+        <circle 
+          cx={cx} 
+          cy={cy} 
+          r={14} 
+          fill="hsl(var(--primary))" 
+          opacity={0.3}
+        />
+        {/* Star shape */}
+        <polygon
+          points={`${cx},${cy-12} ${cx+3},${cy-4} ${cx+11},${cy-4} ${cx+5},${cy+2} ${cx+7},${cy+10} ${cx},${cy+5} ${cx-7},${cy+10} ${cx-5},${cy+2} ${cx-11},${cy-4} ${cx-3},${cy-4}`}
+          fill="hsl(var(--primary))"
+          stroke="hsl(var(--primary-foreground))"
+          strokeWidth={1}
+        />
+      </g>
+    );
+  };
 
   // Custom tooltip for scatter chart
   const ScatterTooltip = ({ active, payload }: any) => {
@@ -186,12 +271,15 @@ export const PropertyAnalysis = ({ result, inputData }: PropertyAnalysisProps) =
       const data = payload[0].payload;
       return (
         <div className="bg-popover border border-border rounded-lg shadow-lg p-3">
-          <p className="font-semibold text-foreground mb-1">{data.name}</p>
+          <div className="flex items-center gap-2 mb-1">
+            {data.isRedesign && <Star className="w-4 h-4 text-primary fill-primary" />}
+            <p className="font-semibold text-foreground">{data.name}</p>
+          </div>
           <p className="text-sm text-muted-foreground">
-            {xAxisOption.label}: {data[xAxisProperty]} {xAxisOption.unit}
+            {xAxisOption.label}: {data[xAxisProperty] ?? data.x} {xAxisOption.unit}
           </p>
           <p className="text-sm text-muted-foreground">
-            {yAxisOption.label}: {data[yAxisProperty]} {yAxisOption.unit}
+            {yAxisOption.label}: {data[yAxisProperty] ?? data.y} {yAxisOption.unit}
           </p>
           {data.isRedesign && (
             <p className="text-xs text-primary font-medium mt-1">★ Your Redesigned Alloy</p>
@@ -208,11 +296,11 @@ export const PropertyAnalysis = ({ result, inputData }: PropertyAnalysisProps) =
       const data = payload[0].payload;
       return (
         <div className="bg-popover border border-border rounded-lg shadow-lg p-3">
-          <p className="font-semibold text-foreground mb-1">{data.phase}</p>
+          {data.phase && <p className="font-semibold text-foreground mb-1">{data.phase}</p>}
           <p className="text-sm text-muted-foreground">Time: {data.time}s</p>
-          <p className="text-sm text-muted-foreground">Temperature: {data.temp}°C</p>
-          {data.suggestedTemp && (
-            <p className="text-sm text-primary">Suggested: {Math.round(data.suggestedTemp)}°C</p>
+          {data.temp && <p className="text-sm text-muted-foreground">TTT Temp: {data.temp}°C</p>}
+          {data.coolingTemp && (
+            <p className="text-sm text-primary">Cooling Rate: {Math.round(data.coolingTemp)}°C</p>
           )}
         </div>
       );
@@ -279,6 +367,7 @@ export const PropertyAnalysis = ({ result, inputData }: PropertyAnalysisProps) =
                     className: 'fill-muted-foreground text-sm'
                   }}
                   className="text-xs fill-muted-foreground"
+                  allowDataOverflow
                 />
                 <YAxis 
                   type="number" 
@@ -303,15 +392,12 @@ export const PropertyAnalysis = ({ result, inputData }: PropertyAnalysisProps) =
                 <Scatter 
                   name="Your Redesign" 
                   data={chartData.filter((d: any) => d.isRedesign)} 
+                  shape={<RedesignStar />}
                 >
                   {chartData.filter((d: any) => d.isRedesign).map((entry: any, index: number) => (
                     <Cell 
                       key={`cell-${index}`} 
                       fill="hsl(var(--primary))"
-                      className="animate-pulse"
-                      style={{ 
-                        filter: 'drop-shadow(0 0 8px hsl(var(--primary)))',
-                      }}
                     />
                   ))}
                 </Scatter>
@@ -319,10 +405,10 @@ export const PropertyAnalysis = ({ result, inputData }: PropertyAnalysisProps) =
             </ResponsiveContainer>
           </div>
           
-          <div className="mt-4 p-3 bg-muted/30 rounded-lg">
+          <div className="mt-4 p-3 bg-muted/30 rounded-lg flex items-center gap-2">
+            <Star className="w-5 h-5 text-primary fill-primary" />
             <p className="text-sm text-muted-foreground">
-              <span className="inline-block w-3 h-3 rounded-full bg-primary mr-2 animate-pulse" style={{ boxShadow: '0 0 8px hsl(var(--primary))' }}></span>
-              Your redesigned alloy is highlighted with a pulsing glow for easy identification.
+              Your redesigned alloy is highlighted as a glowing star for easy identification.
             </p>
           </div>
         </CardContent>
@@ -339,7 +425,7 @@ export const PropertyAnalysis = ({ result, inputData }: PropertyAnalysisProps) =
         <CardContent className="pt-6">
           <div className="h-[400px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={tttData} margin={{ top: 20, right: 30, bottom: 60, left: 60 }}>
+              <LineChart data={mergedTTTData} margin={{ top: 20, right: 30, bottom: 60, left: 60 }}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                 <XAxis 
                   dataKey="time" 
@@ -355,7 +441,6 @@ export const PropertyAnalysis = ({ result, inputData }: PropertyAnalysisProps) =
                   className="text-xs fill-muted-foreground"
                 />
                 <YAxis 
-                  dataKey="temp"
                   domain={[200, 800]}
                   label={{ 
                     value: 'Temperature (°C)', 
@@ -368,6 +453,7 @@ export const PropertyAnalysis = ({ result, inputData }: PropertyAnalysisProps) =
                 />
                 <Tooltip content={<TTTTooltip />} />
                 <Legend />
+                {/* TTT Curve - Solid Line */}
                 <Line 
                   type="monotone" 
                   dataKey="temp" 
@@ -375,16 +461,19 @@ export const PropertyAnalysis = ({ result, inputData }: PropertyAnalysisProps) =
                   strokeWidth={2}
                   dot={{ fill: 'hsl(var(--muted-foreground))', r: 4 }}
                   name="TTT Curve"
+                  connectNulls
                 />
-                {tttData[0]?.suggestedTemp && (
+                {/* Cooling Rate - Dashed Line */}
+                {coolingCurve.length > 0 && (
                   <Line 
                     type="monotone" 
-                    dataKey="suggestedTemp" 
+                    dataKey="coolingTemp" 
                     stroke="hsl(var(--primary))" 
                     strokeWidth={3}
-                    strokeDasharray="5 5"
+                    strokeDasharray="8 4"
                     dot={{ fill: 'hsl(var(--primary))', r: 4 }}
                     name="Suggested Cooling Rate"
+                    connectNulls
                   />
                 )}
                 <ReferenceLine 
@@ -401,7 +490,7 @@ export const PropertyAnalysis = ({ result, inputData }: PropertyAnalysisProps) =
             <div className="p-3 bg-muted/30 rounded-lg">
               <div className="flex items-center gap-2 mb-1">
                 <div className="w-4 h-0.5 bg-muted-foreground"></div>
-                <span className="text-sm font-medium">TTT Curve</span>
+                <span className="text-sm font-medium">TTT Curve (Solid)</span>
               </div>
               <p className="text-xs text-muted-foreground">
                 Shows transformation start times at different temperatures.
@@ -409,8 +498,8 @@ export const PropertyAnalysis = ({ result, inputData }: PropertyAnalysisProps) =
             </div>
             <div className="p-3 bg-primary/5 rounded-lg border border-primary/20">
               <div className="flex items-center gap-2 mb-1">
-                <div className="w-4 h-0.5 bg-primary" style={{ borderStyle: 'dashed' }}></div>
-                <span className="text-sm font-medium text-primary">Suggested Cooling Rate</span>
+                <div className="w-4 h-0.5 bg-primary border-dashed border-t-2 border-primary"></div>
+                <span className="text-sm font-medium text-primary">Cooling Rate (Dashed)</span>
               </div>
               <p className="text-xs text-muted-foreground">
                 Derived from the heat treatment cycle to achieve target microstructure.
