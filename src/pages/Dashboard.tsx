@@ -13,26 +13,10 @@ import type { Json } from "@/integrations/supabase/types";
 
 type ProcessingStatus = "idle" | "processing" | "success" | "error";
 
-// API Response type definition
 interface APIResponse {
   status?: string;
-  data?: {
-    redesign_results?: Record<string, unknown>;
-    composition?: Array<{ element: string; percentage: number }>;
-    properties?: Record<string, unknown>;
-    ashby_data?: Array<Record<string, unknown>>;
-    ttt_data?: {
-      curve?: Array<Record<string, unknown>>;
-      cooling?: Array<Record<string, unknown>>;
-    };
-    summary?: {
-      remarks?: string;
-      performance_gain_percent?: number;
-      cost_change_percent?: number;
-    };
-  };
-  final_output?: Record<string, unknown>;
-  value?: Array<{ final_output?: Record<string, unknown> }>;
+  data?: any;
+  search_count?: number;
 }
 
 const Dashboard = () => {
@@ -61,34 +45,42 @@ const Dashboard = () => {
         "https://tejanaidu5.app.n8n.cloud/webhook/redesign-alloy",
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         }
       );
 
+      // Check for empty or non-ok responses before parsing
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: "Unknown error" }));
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+        throw new Error(`Server returned status: ${response.status}`);
       }
 
-      const resultData: APIResponse = await response.json();
+      const rawResponse = await response.text();
+      if (!rawResponse) throw new Error("Empty response received from server");
+
+      const resultData: APIResponse = JSON.parse(rawResponse);
       
-      // Check for success status
+      // Robustly handle stringified 'data' fields
+      if (typeof resultData.data === 'string') {
+        try {
+          resultData.data = JSON.parse(resultData.data);
+        } catch (e) {
+          console.warn("Could not parse nested data string, keeping as is.");
+        }
+      }
+
       if (resultData.status === "success" || resultData.data) {
         setResult(resultData);
         setStatus("success");
       } else {
-        throw new Error("Invalid response format");
+        throw new Error("Invalid response format received.");
       }
     } catch (error) {
-      console.error("Error submitting alloy data:", error);
+      console.error("Submission error:", error);
       setStatus("error");
-      const errorMessage = error instanceof Error ? error.message : "Failed to connect to API";
       toast({
         title: "Analysis Failed",
-        description: errorMessage,
+        description: error instanceof Error ? error.message : "Failed to connect to API",
         variant: "destructive",
       });
     } finally {
@@ -97,27 +89,20 @@ const Dashboard = () => {
   };
 
   const handleSaveProject = async () => {
-    if (!result || !currentInput || !user) {
-      toast({
-        title: "Cannot Save",
-        description: "Please complete an analysis first.",
-        variant: "destructive",
-      });
-      return;
-    }
-
+    if (!result || !currentInput || !user) return;
     setIsSaving(true);
 
     try {
-      // Use new data structure
-      const performanceGain = result.data?.summary?.performance_gain_percent || 
-                              result.data?.redesign_results?.analysis_summary?.performance_gain_percent || 0;
-      const costDelta = result.data?.summary?.cost_change_percent || 
-                        result.data?.redesign_results?.analysis_summary?.cost_change_percent || 0;
+      // Map metrics from the finalized backend structure
+      const redesignedAlloy = result.data?.redesigned_alloy || result.data;
+      const summary = result.data?.analysis_summary || result.data?.summary;
+      
+      const performanceGain = summary?.performance_gain_percent || 0;
+      const costDelta = summary?.cost_change_percent || 0;
 
       const { error } = await supabase.from("projects").insert([{
         user_id: user.id,
-        name: `${currentInput.original_alloy.name} Redesign`,
+        name: `${currentInput.original_alloy.name} Optimized`,
         base_alloy: currentInput.original_alloy.name,
         input_data: currentInput as unknown as Json,
         result_data: result as unknown as Json,
@@ -130,13 +115,12 @@ const Dashboard = () => {
 
       toast({
         title: "Project Saved",
-        description: "Your analysis has been saved to Project History.",
+        description: "Redesign successfully saved to your history.",
       });
     } catch (error) {
-      console.error("Error saving project:", error);
+      console.error("Save error:", error);
       toast({
         title: "Save Failed",
-        description: "Could not save the project. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -146,100 +130,16 @@ const Dashboard = () => {
 
   const getStatusIcon = () => {
     switch (status) {
-      case "processing":
-        return <Loader2 className="w-4 h-4 animate-spin text-primary" />;
-      case "success":
-        return <CheckCircle className="w-4 h-4 text-success" />;
-      case "error":
-        return <XCircle className="w-4 h-4 text-destructive" />;
-      default:
-        return <Clock className="w-4 h-4 text-muted-foreground" />;
-    }
-  };
-
-  const getStatusText = () => {
-    switch (status) {
-      case "processing":
-        return "AI is analyzing your alloy...";
-      case "success":
-        return "Analysis complete";
-      case "error":
-        return "Analysis failed";
-      default:
-        return "Ready for analysis";
+      case "processing": return <Loader2 className="w-4 h-4 animate-spin text-primary" />;
+      case "success": return <CheckCircle className="w-4 h-4 text-green-500" />;
+      case "error": return <XCircle className="w-4 h-4 text-destructive" />;
+      default: return <Clock className="w-4 h-4 text-muted-foreground" />;
     }
   };
 
   return (
     <AppLayout>
-      {/* Full-screen Loading Overlay */}
       {isLoading && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-          <div className="text-center space-y-6 p-8 rounded-2xl bg-card border border-border shadow-2xl">
-            <div className="relative">
-              <div className="w-20 h-20 rounded-full border-4 border-primary/20 mx-auto flex items-center justify-center">
-                <Loader2 className="w-10 h-10 text-primary animate-spin" />
-              </div>
-              <div className="absolute inset-0 w-20 h-20 mx-auto rounded-full border-4 border-transparent border-t-primary animate-spin" style={{ animationDuration: '1.5s' }} />
-            </div>
-            <div>
-              <h3 className="text-xl font-semibold text-foreground mb-2">Analyzing Your Alloy</h3>
-              <p className="text-muted-foreground">Our AI is optimizing your composition...</p>
-            </div>
-            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-              <Clock className="w-4 h-4" />
-              <span>This may take a moment</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="p-6 lg:p-8 max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">Alloy Redesign Workspace</h1>
-            <p className="text-muted-foreground mt-1">
-              Input parameters and optimize your alloy composition with AI
-            </p>
-          </div>
-          <div className="flex items-center gap-4">
-            {/* Status Indicator */}
-            <div className="flex items-center gap-2 px-4 py-2 bg-muted rounded-lg">
-              {getStatusIcon()}
-              <span className="text-sm font-medium text-muted-foreground">
-                {getStatusText()}
-              </span>
-            </div>
-            {/* Save Button */}
-            <Button
-              onClick={handleSaveProject}
-              disabled={!result || isSaving}
-              variant="outline"
-              className="gap-2"
-            >
-              {isSaving ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Save className="w-4 h-4" />
-              )}
-              Save to Project
-            </Button>
-          </div>
-        </div>
-
-        {/* Example Selector */}
-        <ExampleSelector />
-
-        {/* Main Content */}
-        <div className="grid lg:grid-cols-2 gap-8 mt-8">
-          <AlloyForm onSubmit={handleSubmit} isLoading={isLoading} />
-          <ResultsDisplay result={result} isLoading={isLoading} inputData={currentInput} />
-        </div>
-      </div>
-    </AppLayout>
-  );
-};
-
-export default Dashboard;
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/90 backdrop-blur-md">
+          <div className="text-center
 
