@@ -165,13 +165,16 @@ export const PropertyAnalysis = ({ result, inputData }: PropertyAnalysisProps) =
     return referenceAlloys;
   }, [result, apiData, finalOutput, xAxisProperty, yAxisProperty]);
 
-  // Extract TTT data - prefer new format ttt_data
+  // Extract TTT data - prefer new format from backend
   const { tttCurve, coolingCurve } = useMemo(() => {
-    // Check for new format ttt_data with curve and cooling
-    if (apiData?.ttt_data) {
+    // Check for new format from n8n backend: result.data.ttt_curve/cooling_path
+    const rawCurve = result?.data?.ttt_curve || apiData?.ttt_curve || [];
+    const rawCooling = result?.data?.cooling_path || apiData?.cooling_path || [];
+
+    if (rawCurve.length > 0) {
       return {
-        tttCurve: apiData.ttt_data.curve || [],
-        coolingCurve: apiData.ttt_data.cooling || [],
+        tttCurve: rawCurve,
+        coolingCurve: rawCooling,
       };
     }
     
@@ -222,13 +225,18 @@ export const PropertyAnalysis = ({ result, inputData }: PropertyAnalysisProps) =
       return tttCurve;
     }
     
-    // Merge curve and cooling data by time
+    // Merge TTT data for the line chart
+  const mergedTTTData = useMemo(() => {
+    if (tttCurve.length === 0) return [];
+
     const timeMap = new Map();
-    
+
+    // Add transformation curve points (solid line)
     tttCurve.forEach((point: any) => {
       timeMap.set(point.time, { ...point });
     });
-    
+
+    // Add cooling path points (dashed line)
     coolingCurve.forEach((point: any) => {
       if (timeMap.has(point.time)) {
         timeMap.get(point.time).coolingTemp = point.temp;
@@ -236,7 +244,7 @@ export const PropertyAnalysis = ({ result, inputData }: PropertyAnalysisProps) =
         timeMap.set(point.time, { time: point.time, coolingTemp: point.temp });
       }
     });
-    
+
     return Array.from(timeMap.values()).sort((a, b) => a.time - b.time);
   }, [tttCurve, coolingCurve]);
 
