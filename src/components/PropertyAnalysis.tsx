@@ -19,10 +19,9 @@ import {
   LineChart,
   Line,
   Legend,
-  Cell,
   ReferenceLine,
 } from "recharts";
-import { TrendingUp, Thermometer, Star } from "lucide-react";
+import { TrendingUp, Thermometer, Sparkles, GitBranch } from "lucide-react";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ApiResult = any;
@@ -41,8 +40,8 @@ interface PropertyOption {
 export const PropertyAnalysis = ({ result, inputData }: PropertyAnalysisProps) => {
   // DATA EXTRACTION: Pointing to the new nested "Mega-Object"
   const apiData = result?.data;
-  const redesignedAlloy = apiData?.redesigned_alloy;
-  const chartRoot = redesignedAlloy?.chart_data; // This contains ashby and ttt
+  const redesignedAlloy = apiData?.redesigned_alloy || apiData;
+  const chartRoot = redesignedAlloy?.chart_data;
 
   const availableProperties = useMemo((): PropertyOption[] => {
     const properties: PropertyOption[] = [];
@@ -85,7 +84,6 @@ export const PropertyAnalysis = ({ result, inputData }: PropertyAnalysisProps) =
     if (Array.isArray(rawAshby) && rawAshby.length > 0) {
       return rawAshby.map((point: any) => ({
         ...point,
-        // Map backend x/y to current select values
         [xAxisProperty]: point.x,
         [yAxisProperty]: point.y,
       }));
@@ -117,19 +115,68 @@ export const PropertyAnalysis = ({ result, inputData }: PropertyAnalysisProps) =
     return Array.from(timeMap.values()).sort((a, b) => a.time - b.time);
   }, [chartRoot]);
 
-  // UI SHAPES & TOOLTIPS
+  // ANIMATED GLOWING STAR for redesigned alloy
   const RedesignStar = (props: any) => {
     const { cx, cy, payload } = props;
-    if (!payload.isRedesign) return null;
+    if (!payload?.isRedesign) return null;
+    
+    return (
+      <g className="animate-pulse">
+        {/* Outer glow rings */}
+        <circle cx={cx} cy={cy} r={32} fill="hsl(var(--primary))" opacity={0.1}>
+          <animate attributeName="r" values="28;35;28" dur="2s" repeatCount="indefinite" />
+          <animate attributeName="opacity" values="0.1;0.2;0.1" dur="2s" repeatCount="indefinite" />
+        </circle>
+        <circle cx={cx} cy={cy} r={24} fill="hsl(var(--primary))" opacity={0.15}>
+          <animate attributeName="r" values="20;26;20" dur="2s" repeatCount="indefinite" />
+        </circle>
+        <circle cx={cx} cy={cy} r={16} fill="hsl(var(--primary))" opacity={0.25}>
+          <animate attributeName="r" values="14;18;14" dur="2s" repeatCount="indefinite" />
+        </circle>
+        
+        {/* Star shape */}
+        <polygon
+          points={`${cx},${cy-14} ${cx+4},${cy-5} ${cx+13},${cy-5} ${cx+6},${cy+2} ${cx+8},${cy+12} ${cx},${cy+6} ${cx-8},${cy+12} ${cx-6},${cy+2} ${cx-13},${cy-5} ${cx-4},${cy-5}`}
+          fill="url(#starGradient)"
+          stroke="hsl(var(--primary-foreground))"
+          strokeWidth={1.5}
+          filter="url(#glow)"
+        >
+          <animate attributeName="opacity" values="0.9;1;0.9" dur="1.5s" repeatCount="indefinite" />
+        </polygon>
+        
+        {/* Label */}
+        <text x={cx} y={cy + 28} textAnchor="middle" fill="hsl(var(--primary))" fontSize="11" fontWeight="bold">
+          REDESIGN
+        </text>
+        
+        {/* SVG Defs for gradient and glow */}
+        <defs>
+          <linearGradient id="starGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="hsl(var(--primary))" />
+            <stop offset="100%" stopColor="hsl(var(--accent))" />
+          </linearGradient>
+          <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+            <feMerge>
+              <feMergeNode in="coloredBlur"/>
+              <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+          </filter>
+        </defs>
+      </g>
+    );
+  };
+
+  // Reference alloy dot (muted gray)
+  const ReferenceAlloyDot = (props: any) => {
+    const { cx, cy, payload } = props;
+    if (payload?.isRedesign) return null;
+    
     return (
       <g>
-        <circle cx={cx} cy={cy} r={20} fill="hsl(var(--primary))" opacity={0.2} className="animate-pulse" />
-        <polygon
-          points={`${cx},${cy-12} ${cx+3},${cy-4} ${cx+11},${cy-4} ${cx+5},${cy+2} ${cx+7},${cy+10} ${cx},${cy+5} ${cx-7},${cy+10} ${cx-5},${cy+2} ${cx-11},${cy-4} ${cx-3},${cy-4}`}
-          fill="hsl(var(--primary))"
-          stroke="hsl(var(--primary-foreground))"
-          strokeWidth={1}
-        />
+        <circle cx={cx} cy={cy} r={6} fill="hsl(var(--muted-foreground))" opacity={0.4} />
+        <circle cx={cx} cy={cy} r={4} fill="hsl(var(--muted-foreground))" opacity={0.6} />
       </g>
     );
   };
@@ -137,11 +184,38 @@ export const PropertyAnalysis = ({ result, inputData }: PropertyAnalysisProps) =
   const ScatterTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
+      const isRedesign = data.isRedesign;
+      
       return (
-        <div className="bg-popover border border-border rounded-lg shadow-lg p-3">
-          <p className="font-semibold text-foreground">{data.name}</p>
-          <p className="text-sm text-muted-foreground">{xAxisOption.label}: {data[xAxisProperty]} {xAxisOption.unit}</p>
-          <p className="text-sm text-muted-foreground">{yAxisOption.label}: {data[yAxisProperty]} {yAxisOption.unit}</p>
+        <div className={`rounded-xl shadow-2xl p-4 border-2 backdrop-blur-sm ${
+          isRedesign 
+            ? 'bg-gradient-to-br from-primary/90 to-accent/90 border-primary text-primary-foreground' 
+            : 'bg-popover/95 border-border text-foreground'
+        }`}>
+          <div className="flex items-center gap-2 mb-2">
+            {isRedesign && <Sparkles className="w-4 h-4" />}
+            <p className="font-bold text-lg">{data.name}</p>
+          </div>
+          <div className="space-y-1 text-sm opacity-90">
+            <p>{xAxisOption.label}: <span className="font-semibold">{data[xAxisProperty]} {xAxisOption.unit}</span></p>
+            <p>{yAxisOption.label}: <span className="font-semibold">{data[yAxisProperty]} {yAxisOption.unit}</span></p>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  const TTTTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-popover/95 backdrop-blur-sm border border-border rounded-xl shadow-2xl p-4">
+          <p className="font-bold text-foreground mb-2">Time: {payload[0]?.payload?.time}s</p>
+          {payload.map((entry: any, index: number) => (
+            <p key={index} className="text-sm" style={{ color: entry.stroke }}>
+              {entry.name}: <span className="font-semibold">{entry.value?.toFixed(0)}°C</span>
+            </p>
+          ))}
         </div>
       );
     }
@@ -149,20 +223,31 @@ export const PropertyAnalysis = ({ result, inputData }: PropertyAnalysisProps) =
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Ashby Plot Card */}
-      <Card className="shadow-lg">
-        <CardHeader className="bg-gradient-to-r from-primary/5 to-accent/5">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-primary" /> Property Analysis - Ashby Plot
+      <Card className="shadow-xl border-border/50 overflow-hidden">
+        <CardHeader className="bg-gradient-to-r from-primary/10 via-primary/5 to-accent/10 border-b border-border/50">
+          <CardTitle className="flex items-center gap-3 text-xl">
+            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg shadow-primary/25">
+              <TrendingUp className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <span>Ashby Property Map</span>
+              <p className="text-sm font-normal text-muted-foreground mt-0.5">
+                Compare redesigned alloy against reference materials
+              </p>
+            </div>
           </CardTitle>
         </CardHeader>
-        <CardContent className="pt-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <CardContent className="pt-6 pb-6">
+          {/* Axis Selectors */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
             <div className="space-y-2">
-              <Label>X-Axis</Label>
+              <Label className="text-sm font-medium text-muted-foreground uppercase tracking-wider">X-Axis Property</Label>
               <Select value={xAxisProperty} onValueChange={setXAxisProperty}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-12 border-2 border-border/50 hover:border-primary/50 transition-colors">
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   {availableProperties.map((prop) => (
                     <SelectItem key={prop.key} value={prop.key}>{prop.label}</SelectItem>
@@ -171,9 +256,11 @@ export const PropertyAnalysis = ({ result, inputData }: PropertyAnalysisProps) =
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Y-Axis</Label>
+              <Label className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Y-Axis Property</Label>
               <Select value={yAxisProperty} onValueChange={setYAxisProperty}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-12 border-2 border-border/50 hover:border-primary/50 transition-colors">
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   {availableProperties.map((prop) => (
                     <SelectItem key={prop.key} value={prop.key}>{prop.label}</SelectItem>
@@ -182,15 +269,55 @@ export const PropertyAnalysis = ({ result, inputData }: PropertyAnalysisProps) =
               </Select>
             </div>
           </div>
-          <div className="h-[400px] w-full">
+          
+          {/* Legend */}
+          <div className="flex items-center gap-6 mb-4 px-4">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-muted-foreground/50" />
+              <span className="text-sm text-muted-foreground">Reference Alloys</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-primary" />
+              <span className="text-sm font-medium text-primary">Redesigned Alloy</span>
+            </div>
+          </div>
+          
+          {/* Chart */}
+          <div className="h-[450px] w-full rounded-xl bg-gradient-to-br from-muted/30 to-muted/10 p-4">
             <ResponsiveContainer>
-              <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis type="number" dataKey={xAxisProperty} name={xAxisOption.label} unit={xAxisOption.unit} />
-                <YAxis type="number" dataKey={yAxisProperty} name={yAxisOption.label} unit={yAxisOption.unit} />
+              <ScatterChart margin={{ top: 30, right: 30, bottom: 30, left: 30 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.5} />
+                <XAxis 
+                  type="number" 
+                  dataKey={xAxisProperty} 
+                  name={xAxisOption.label} 
+                  unit={xAxisOption.unit}
+                  tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                  axisLine={{ stroke: 'hsl(var(--border))' }}
+                  label={{ value: `${xAxisOption.label} (${xAxisOption.unit})`, position: 'bottom', offset: 10, fill: 'hsl(var(--foreground))' }}
+                />
+                <YAxis 
+                  type="number" 
+                  dataKey={yAxisProperty} 
+                  name={yAxisOption.label} 
+                  unit={yAxisOption.unit}
+                  tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                  axisLine={{ stroke: 'hsl(var(--border))' }}
+                  label={{ value: `${yAxisOption.label} (${yAxisOption.unit})`, angle: -90, position: 'insideLeft', offset: 10, fill: 'hsl(var(--foreground))' }}
+                />
                 <Tooltip content={<ScatterTooltip />} />
-                <Scatter name="Reference" data={ashbyData.filter((d: any) => !d.isRedesign)} fill="#8884d8" />
-                <Scatter name="Redesign" data={ashbyData.filter((d: any) => d.isRedesign)} shape={<RedesignStar />} />
+                {/* Reference alloys (muted gray dots) */}
+                <Scatter 
+                  name="Reference Alloys" 
+                  data={ashbyData.filter((d: any) => !d.isRedesign)} 
+                  shape={<ReferenceAlloyDot />}
+                />
+                {/* Redesigned alloy (glowing star) */}
+                <Scatter 
+                  name="Redesigned Alloy" 
+                  data={ashbyData.filter((d: any) => d.isRedesign)} 
+                  shape={<RedesignStar />}
+                />
               </ScatterChart>
             </ResponsiveContainer>
           </div>
@@ -198,26 +325,104 @@ export const PropertyAnalysis = ({ result, inputData }: PropertyAnalysisProps) =
       </Card>
 
       {/* TTT Diagram Card */}
-      <Card className="shadow-lg">
-        <CardHeader className="bg-gradient-to-r from-orange-500/5 to-red-500/5">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Thermometer className="w-5 h-5 text-orange-500" /> TTT Diagram
+      <Card className="shadow-xl border-border/50 overflow-hidden">
+        <CardHeader className="bg-gradient-to-r from-orange-500/15 via-orange-500/10 to-amber-500/15 border-b border-orange-500/20">
+          <CardTitle className="flex items-center gap-3 text-xl">
+            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center shadow-lg shadow-orange-500/25">
+              <Thermometer className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <span>TTT Transformation Diagram</span>
+              <p className="text-sm font-normal text-muted-foreground mt-0.5">
+                Time-Temperature-Transformation curve with cooling path overlay
+              </p>
+            </div>
           </CardTitle>
         </CardHeader>
-        <CardContent className="pt-6">
-          <div className="h-[400px] w-full">
+        <CardContent className="pt-6 pb-6">
+          {/* Legend */}
+          <div className="flex items-center gap-6 mb-4 px-4">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-0.5 bg-orange-500 rounded" />
+              <span className="text-sm text-muted-foreground">TTT Curve (Phase Boundary)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-0.5 border-t-2 border-dashed border-primary rounded" />
+              <span className="text-sm font-medium text-primary">Cooling Path (Actual Treatment)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <GitBranch className="w-4 h-4 text-red-500" />
+              <span className="text-sm text-muted-foreground">Ms Line (Martensite Start)</span>
+            </div>
+          </div>
+          
+          {/* Chart */}
+          <div className="h-[450px] w-full rounded-xl bg-gradient-to-br from-orange-500/5 to-amber-500/5 p-4">
             <ResponsiveContainer>
-              <LineChart data={mergedTTTData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="time" scale="log" domain={['auto', 'auto']} />
-                <YAxis domain={['auto', 'auto']} />
-                <Tooltip />
-                <Legend />
-                <Line type="monotone" dataKey="temp" stroke="#8884d8" name="TTT Curve" strokeWidth={2} dot={{r: 4}} />
-                <Line type="monotone" dataKey="coolingTemp" stroke="hsl(var(--primary))" name="Cooling Path" strokeDasharray="5 5" strokeWidth={3} />
-                <ReferenceLine y={400} stroke="red" label="Ms" />
+              <LineChart data={mergedTTTData} margin={{ top: 20, right: 30, bottom: 30, left: 30 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.5} />
+                <XAxis 
+                  dataKey="time" 
+                  scale="log" 
+                  domain={['auto', 'auto']}
+                  tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                  axisLine={{ stroke: 'hsl(var(--border))' }}
+                  label={{ value: 'Time (seconds, log scale)', position: 'bottom', offset: 10, fill: 'hsl(var(--foreground))' }}
+                />
+                <YAxis 
+                  domain={['auto', 'auto']}
+                  tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                  axisLine={{ stroke: 'hsl(var(--border))' }}
+                  label={{ value: 'Temperature (°C)', angle: -90, position: 'insideLeft', offset: 10, fill: 'hsl(var(--foreground))' }}
+                />
+                <Tooltip content={<TTTTooltip />} />
+                <Legend 
+                  wrapperStyle={{ paddingTop: 20 }}
+                  formatter={(value) => <span className="text-foreground font-medium">{value}</span>}
+                />
+                
+                {/* TTT Curve - solid orange line */}
+                <Line 
+                  type="monotone" 
+                  dataKey="temp" 
+                  stroke="#f97316" 
+                  name="TTT Curve" 
+                  strokeWidth={3} 
+                  dot={{ r: 4, fill: '#f97316', strokeWidth: 0 }}
+                  activeDot={{ r: 6, fill: '#f97316', stroke: '#fff', strokeWidth: 2 }}
+                />
+                
+                {/* Cooling Path - dashed primary colored line */}
+                <Line 
+                  type="monotone" 
+                  dataKey="coolingTemp" 
+                  stroke="hsl(var(--primary))" 
+                  name="Cooling Path" 
+                  strokeDasharray="8 4" 
+                  strokeWidth={4}
+                  dot={false}
+                  activeDot={{ r: 6, fill: 'hsl(var(--primary))', stroke: '#fff', strokeWidth: 2 }}
+                />
+                
+                {/* Ms Line (Martensite Start) */}
+                <ReferenceLine 
+                  y={400} 
+                  stroke="#ef4444" 
+                  strokeWidth={2}
+                  strokeDasharray="4 2"
+                  label={{ value: "Ms (Martensite Start)", position: "right", fill: "#ef4444", fontSize: 12 }} 
+                />
               </LineChart>
             </ResponsiveContainer>
+          </div>
+          
+          {/* Interpretation Note */}
+          <div className="mt-4 p-4 rounded-xl bg-muted/30 border border-border/50">
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              <span className="font-semibold text-foreground">Interpretation:</span> The cooling path (dashed line) shows how the alloy temperature decreases during quenching. 
+              Where this line intersects or avoids the TTT curve determines the final microstructure. 
+              Rapid cooling that "misses" the nose of the TTT curve results in martensitic transformation.
+            </p>
           </div>
         </CardContent>
       </Card>
