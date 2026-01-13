@@ -130,5 +130,51 @@ const handleSubmit = async (data: AlloyData) => {
     <AppLayout>
       {isLoading && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/90 backdrop-blur-md">
-          <div className="text-center
+          <div className="text-center space-y-4">
+            <Loader2 className="w-12 h-12 animate-spin text-primary mx-auto" />
+            <p className="text-lg font-medium text-foreground">Analyzing alloy composition...</p>
+            <p className="text-sm text-muted-foreground">This may take a moment</p>
+          </div>
+        </div>
+      )}
 
+      <div className="space-y-8">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">Alloy Redesign</h1>
+            <p className="text-muted-foreground mt-1">Optimize your alloy composition for better performance</p>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted">
+              {getStatusIcon()}
+              <span className="text-sm font-medium capitalize">{status}</span>
+            </div>
+            {result && (
+              <Button
+                onClick={handleSaveProject}
+                disabled={isSaving}
+                className="gap-2"
+              >
+                {isSaving ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4" />
+                )}
+                Save to Project
+              </Button>
+            )}
+          </div>
+        </div>
+
+        <ExampleSelector />
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <AlloyForm onSubmit={handleSubmit} isLoading={isLoading} />
+          {result && <ResultsDisplay result={result} />}
+        </div>
+      </div>
+    </AppLayout>
+  );
+};
+
+export default Dashboard;
