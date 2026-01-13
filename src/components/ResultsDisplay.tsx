@@ -1,13 +1,15 @@
-import { AchievedImprovement, AlloyData } from "@/types/alloy";
-import { CheckCircle2, Loader2, Clock, TrendingUp, MessageCircle, Send, IndianRupee, CheckCircle, XCircle, AlertCircle, FileDown, Thermometer } from "lucide-react";
-import { useEffect, useState, useRef } from "react";
+import { IndianRupee, Thermometer } from "lucide-react";
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
-import { Textarea } from "@/components/ui/textarea";
-import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { calculateCompositionCostFromObject } from "@/lib/elementPrices";
 import { PropertyAnalysis } from "@/components/PropertyAnalysis";
+import { AlloyData } from "@/types/alloy";
+
+interface ResultsDisplayProps {
+  result: any;
+  isLoading?: boolean;
+  inputData?: AlloyData;
+}
 
 export const ResultsDisplay = ({ result, isLoading, inputData }: ResultsDisplayProps) => {
   const { toast } = useToast();
@@ -42,7 +44,7 @@ export const ResultsDisplay = ({ result, isLoading, inputData }: ResultsDisplayP
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             {Object.entries(composition).map(([el, val]) => (
               <div key={el} className="p-2 border rounded bg-muted/30">
-                <span className="font-bold">{el}:</span> {val}%
+                <span className="font-bold">{el}:</span> {String(val)}%
               </div>
             ))}
           </div>
@@ -89,7 +91,7 @@ export const ResultsDisplay = ({ result, isLoading, inputData }: ResultsDisplayP
             {Object.entries(properties).map(([k, v]) => (
               <div key={k} className="flex justify-between border-b py-1">
                 <span className="capitalize">{k.replace(/_/g, ' ')}</span>
-                <span className="font-bold">{v}</span>
+                <span className="font-bold">{String(v)}</span>
               </div>
             ))}
           </CardContent>
