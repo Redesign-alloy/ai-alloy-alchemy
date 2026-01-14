@@ -28,6 +28,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { PropertyAnalysis } from "@/components/PropertyAnalysis";
 import { AlloyData } from "@/types/alloy";
+import { TypingAnimation } from "@/components/TypingAnimation";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 
@@ -161,6 +162,59 @@ export const ResultsDisplay = ({ result, isLoading, inputData }: ResultsDisplayP
     }
   };
 
+  // Parse the output field from n8n webhook response
+  const parseWebhookOutput = (data: any): string => {
+    // Handle string response
+    if (typeof data === 'string') {
+      return data;
+    }
+    
+    // Primary: Extract from 'output' field (n8n webhook format)
+    if (data.output) {
+      if (typeof data.output === 'string') {
+        return data.output;
+      }
+      // If output is an object, try to get text from it
+      if (data.output.text) {
+        return data.output.text;
+      }
+      if (data.output.content) {
+        return data.output.content;
+      }
+    }
+    
+    // Fallback to other common response formats
+    if (data.answer) return data.answer;
+    if (data.response) return data.response;
+    if (data.message) return data.message;
+    if (data.text) return data.text;
+    if (data.content) return data.content;
+    
+    // If it's an array with output field
+    if (Array.isArray(data) && data[0]?.output) {
+      return parseWebhookOutput(data[0]);
+    }
+    
+    // Last resort: stringify but try to extract meaningful content
+    const stringified = JSON.stringify(data);
+    
+    // If it looks like a simple wrapper, try to extract
+    try {
+      const parsed = typeof data === 'object' ? data : JSON.parse(stringified);
+      const keys = Object.keys(parsed);
+      if (keys.length === 1) {
+        const value = parsed[keys[0]];
+        if (typeof value === 'string') {
+          return value;
+        }
+      }
+    } catch {
+      // Ignore parsing errors
+    }
+    
+    return stringified;
+  };
+
   // Handle asking question about results
   const handleAskQuestion = async () => {
     if (!question.trim() || !result) return;
@@ -191,20 +245,9 @@ export const ResultsDisplay = ({ result, isLoading, inputData }: ResultsDisplayP
 
       const data = await response.json();
       
-      // Parse JSON response - handle various formats
-      if (typeof data === 'string') {
-        setChatResponse(data);
-      } else if (data.answer) {
-        setChatResponse(data.answer);
-      } else if (data.response) {
-        setChatResponse(data.response);
-      } else if (data.message) {
-        setChatResponse(data.message);
-      } else if (data.text) {
-        setChatResponse(data.text);
-      } else {
-        setChatResponse(JSON.stringify(data, null, 2));
-      }
+      // Parse JSON response using dedicated parser to extract output field
+      const parsedOutput = parseWebhookOutput(data);
+      setChatResponse(parsedOutput);
     } catch (error) {
       console.error('Failed to ask question:', error);
       setChatResponse('Sorry, there was an error processing your question. Please try again.');
@@ -750,9 +793,13 @@ export const ResultsDisplay = ({ result, isLoading, inputData }: ResultsDisplayP
                       </div>
                       <p className="text-sm uppercase tracking-wider text-muted-foreground font-semibold">AI Response</p>
                     </div>
-                    <p className="text-base leading-relaxed text-foreground/90 font-light tracking-wide whitespace-pre-wrap" style={{ lineHeight: '1.8' }}>
-                      {chatResponse}
-                    </p>
+                    <div className="text-base leading-relaxed text-foreground/90 font-light tracking-wide" style={{ lineHeight: '1.8' }}>
+                      <TypingAnimation 
+                        text={chatResponse || ''} 
+                        speed={12}
+                        className="prose prose-sm max-w-none dark:prose-invert"
+                      />
+                    </div>
                   </div>
                 )}
               </div>

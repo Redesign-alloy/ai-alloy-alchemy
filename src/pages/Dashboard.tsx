@@ -4,11 +4,11 @@ import { ResultsDisplay } from "@/components/ResultsDisplay";
 import { ExampleSelector } from "@/components/ExampleSelector";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
-import { Save, Loader2, CheckCircle, XCircle, Clock } from "lucide-react";
+import { Save, Loader2, CheckCircle, XCircle, Clock, History } from "lucide-react";
 import { AlloyData } from "@/types/alloy";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
+import { useProjects } from "@/hooks/useProjects";
 import type { Json } from "@/integrations/supabase/types";
 
 type ProcessingStatus = "idle" | "processing" | "success" | "error";
@@ -22,9 +22,9 @@ interface APIResponse {
 const Dashboard = () => {
   const { toast } = useToast();
   const { user } = useAuth();
+  const { createProject, isCreating, projectCount, refetch: refetchProjects } = useProjects();
   const [result, setResult] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
   const [currentInput, setCurrentInput] = useState<AlloyData | null>(null);
   const [status, setStatus] = useState<ProcessingStatus>("idle");
 
@@ -61,6 +61,9 @@ const handleSubmit = async (data: AlloyData) => {
     if (resultData.status === "success" && resultData.data) {
       setResult(resultData);
       setStatus("success");
+      
+      // Refetch projects to sync any backend changes
+      refetchProjects();
     } else {
       throw new Error("Invalid response format: 'data' or 'status' missing.");
     }
@@ -79,7 +82,6 @@ const handleSubmit = async (data: AlloyData) => {
 
   const handleSaveProject = async () => {
     if (!result || !currentInput || !user) return;
-    setIsSaving(true);
 
     try {
       // Map metrics from the finalized backend structure
@@ -89,8 +91,7 @@ const handleSubmit = async (data: AlloyData) => {
       const performanceGain = summary?.performance_gain_percent || 0;
       const costDelta = summary?.cost_change_percent || 0;
 
-      const { error } = await supabase.from("projects").insert([{
-        user_id: user.id,
+      await createProject({
         name: `${currentInput.original_alloy.name} Optimized`,
         base_alloy: currentInput.original_alloy.name,
         input_data: currentInput as unknown as Json,
@@ -98,9 +99,7 @@ const handleSubmit = async (data: AlloyData) => {
         performance_gain: performanceGain,
         cost_delta: costDelta,
         status: "completed",
-      }]);
-
-      if (error) throw error;
+      });
 
       toast({
         title: "Project Saved",
@@ -112,8 +111,6 @@ const handleSubmit = async (data: AlloyData) => {
         title: "Save Failed",
         variant: "destructive",
       });
-    } finally {
-      setIsSaving(false);
     }
   };
 
@@ -145,6 +142,14 @@ const handleSubmit = async (data: AlloyData) => {
             <p className="text-muted-foreground mt-1">Optimize your alloy composition for better performance</p>
           </div>
           <div className="flex items-center gap-4">
+            {/* Project Count Badge */}
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted/50 border border-border/50">
+              <History className="w-4 h-4 text-muted-foreground" />
+              <span className="text-sm font-medium text-muted-foreground">
+                {projectCount} project{projectCount !== 1 ? 's' : ''}
+              </span>
+            </div>
+            
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted">
               {getStatusIcon()}
               <span className="text-sm font-medium capitalize">{status}</span>
@@ -152,10 +157,10 @@ const handleSubmit = async (data: AlloyData) => {
             {result && (
               <Button
                 onClick={handleSaveProject}
-                disabled={isSaving}
+                disabled={isCreating}
                 className="gap-2"
               >
-                {isSaving ? (
+                {isCreating ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
                   <Save className="w-4 h-4" />

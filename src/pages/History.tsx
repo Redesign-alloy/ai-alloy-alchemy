@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,63 +17,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Search, Download, Eye, Loader2, History as HistoryIcon } from "lucide-react";
-import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
+import { Search, Download, Eye, Loader2, History as HistoryIcon, RefreshCw, XCircle } from "lucide-react";
+import { useProjects, Project } from "@/hooks/useProjects";
 import { format } from "date-fns";
 
-interface Project {
-  id: string;
-  user_id: string;
-  name: string;
-  base_alloy: string;
-  input_data: unknown;
-  result_data: unknown;
-  status: string | null;
-  performance_gain: number | null;
-  cost_delta: number | null;
-  created_at: string;
-  updated_at: string;
-}
-
 const History = () => {
-  const { user } = useAuth();
-  const { toast } = useToast();
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { projects, isLoading, error, refetch } = useProjects();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-
-  useEffect(() => {
-    if (user) {
-      fetchProjects();
-    }
-  }, [user]);
-
-  const fetchProjects = async () => {
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from("projects")
-        .select("*")
-        .eq("user_id", user?.id)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      setProjects(data || []);
-    } catch (error: any) {
-      console.error("Error fetching projects:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load project history.",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const filteredProjects = projects.filter((project) =>
     project.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -107,11 +59,29 @@ const History = () => {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
           <div>
             <h1 className="text-3xl font-bold text-foreground">Project History</h1>
-            <p className="text-muted-foreground mt-1">View your saved alloy redesigns</p>
+            <p className="text-muted-foreground mt-1">
+              View your saved alloy redesigns 
+              {projects.length > 0 && (
+                <span className="ml-2 px-2 py-0.5 bg-primary/10 text-primary text-sm rounded-full font-medium">
+                  {projects.length} project{projects.length !== 1 ? 's' : ''}
+                </span>
+              )}
+            </p>
           </div>
-          <Button onClick={handleExportCSV} variant="outline" className="gap-2">
-            <Download className="w-4 h-4" /> Export CSV
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button 
+              onClick={() => refetch()} 
+              variant="outline" 
+              size="icon"
+              className="shrink-0"
+              title="Refresh"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </Button>
+            <Button onClick={handleExportCSV} variant="outline" className="gap-2">
+              <Download className="w-4 h-4" /> Export CSV
+            </Button>
+          </div>
         </div>
 
         <Card className="mb-6">
@@ -135,9 +105,18 @@ const History = () => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {loading ? (
+            {isLoading ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              </div>
+            ) : error ? (
+              <div className="text-center py-12">
+                <XCircle className="w-12 h-12 text-destructive mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-foreground mb-2">Failed to load projects</h3>
+                <p className="text-muted-foreground mb-4">There was an error loading your project history.</p>
+                <Button onClick={() => refetch()} variant="outline" className="gap-2">
+                  <RefreshCw className="w-4 h-4" /> Try Again
+                </Button>
               </div>
             ) : filteredProjects.length === 0 ? (
               <div className="text-center py-12">
@@ -160,7 +139,7 @@ const History = () => {
                   </TableHeader>
                   <TableBody>
                     {filteredProjects.map((project) => (
-                      <TableRow key={project.id}>
+                      <TableRow key={project.id} className="animate-in fade-in-0 duration-300">
                         <TableCell>{format(new Date(project.created_at), "MMM dd, yyyy")}</TableCell>
                         <TableCell className="font-medium">{project.name}</TableCell>
                         <TableCell>{project.base_alloy}</TableCell>
