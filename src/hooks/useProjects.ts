@@ -1,7 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import type { Json } from "@/integrations/supabase/types";
 
 export interface Project {
   id: string;
@@ -20,8 +19,8 @@ export interface Project {
 export interface CreateProjectData {
   name: string;
   base_alloy: string;
-  input_data: Json;
-  result_data: Json;
+  input_data: unknown;
+  result_data: unknown;
   performance_gain?: number;
   cost_delta?: number;
   status?: string;
@@ -31,19 +30,19 @@ export const useProjects = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  // Fetch all projects for the current user
+  // Fetch all projects from alloy_data table for the current user
   const {
     data: projects = [],
     isLoading,
     error,
     refetch
   } = useQuery({
-    queryKey: ['projects', user?.id],
+    queryKey: ['alloy_data', user?.id],
     queryFn: async () => {
       if (!user?.id) return [];
       
-      const { data, error } = await supabase
-        .from("projects")
+      const { data, error } = await (supabase as any)
+        .from("alloy_data")
         .select("*")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
@@ -52,7 +51,7 @@ export const useProjects = () => {
       return (data || []) as Project[];
     },
     enabled: !!user?.id,
-    staleTime: 30000, // Consider data fresh for 30 seconds
+    staleTime: 30000,
     refetchOnWindowFocus: true,
   });
 
@@ -61,26 +60,53 @@ export const useProjects = () => {
     mutationFn: async (projectData: CreateProjectData) => {
       if (!user?.id) throw new Error("User not authenticated");
       
-      const { data, error } = await supabase
-        .from("projects")
+      const { data, error } = await (supabase as any)
+        .from("alloy_data")
         .insert([{
           user_id: user.id,
-          ...projectData,
+          name: projectData.name,
+          base_alloy: projectData.base_alloy,
+          input_data: projectData.input_data,
+          result_data: projectData.result_data,
+          performance_gain: projectData.performance_gain,
+          cost_delta: projectData.cost_delta,
+          status: projectData.status || 'completed',
         }])
         .select()
         .single();
 
       if (error) throw error;
+      
+      // Increment search_count in users table
+      try {
+        // First get current count
+        const { data: userData } = await (supabase as any)
+          .from("users")
+          .select("search_count")
+          .eq("id", user.id)
+          .single();
+        
+        const currentCount = userData?.search_count || 0;
+        
+        // Update with incremented count
+        await (supabase as any)
+          .from("users")
+          .update({ search_count: currentCount + 1 })
+          .eq("id", user.id);
+      } catch (countError) {
+        console.error("Error updating search count:", countError);
+      }
+      
+      // Invalidate search count query
+      queryClient.invalidateQueries({ queryKey: ['searchCount', user.id] });
+      
       return data as Project;
     },
     onMutate: async (newProject) => {
-      // Cancel any outgoing refetches
-      await queryClient.cancelQueries({ queryKey: ['projects', user?.id] });
+      await queryClient.cancelQueries({ queryKey: ['alloy_data', user?.id] });
 
-      // Snapshot the previous value
-      const previousProjects = queryClient.getQueryData<Project[]>(['projects', user?.id]);
+      const previousProjects = queryClient.getQueryData<Project[]>(['alloy_data', user?.id]);
 
-      // Optimistically update to the new value
       if (previousProjects) {
         const optimisticProject: Project = {
           id: `temp-${Date.now()}`,
@@ -97,7 +123,7 @@ export const useProjects = () => {
         };
         
         queryClient.setQueryData<Project[]>(
-          ['projects', user?.id],
+          ['alloy_data', user?.id],
           [optimisticProject, ...previousProjects]
         );
       }
@@ -105,18 +131,15 @@ export const useProjects = () => {
       return { previousProjects };
     },
     onError: (err, newProject, context) => {
-      // Roll back to the previous value on error
       if (context?.previousProjects) {
-        queryClient.setQueryData(['projects', user?.id], context.previousProjects);
+        queryClient.setQueryData(['alloy_data', user?.id], context.previousProjects);
       }
     },
     onSettled: () => {
-      // Always refetch after error or success
-      queryClient.invalidateQueries({ queryKey: ['projects', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['alloy_data', user?.id] });
     },
   });
 
-  // Get project count
   const projectCount = projects.length;
 
   return {
@@ -130,26 +153,37 @@ export const useProjects = () => {
   };
 };
 
-// Hook specifically for project count (lightweight)
-export const useProjectCount = () => {
+// Hook for search count from users table
+export const useSearchCount = () => {
   const { user } = useAuth();
 
-  const { data: count = 0, isLoading } = useQuery({
-    queryKey: ['projectCount', user?.id],
+  const { data: count = 0, isLoading, refetch } = useQuery({
+    queryKey: ['searchCount', user?.id],
     queryFn: async () => {
       if (!user?.id) return 0;
       
-      const { count, error } = await supabase
-        .from("projects")
-        .select("*", { count: 'exact', head: true })
-        .eq("user_id", user.id);
+      const { data, error } = await (supabase as any)
+        .from("users")
+        .select("search_count")
+        .eq("id", user.id)
+        .single();
 
-      if (error) throw error;
-      return count || 0;
+      if (error) {
+        console.error("Error fetching search count:", error);
+        return 0;
+      }
+      return data?.search_count || 0;
     },
     enabled: !!user?.id,
-    staleTime: 30000,
+    staleTime: 10000,
+    refetchOnWindowFocus: true,
   });
 
+  return { count, isLoading, refetch };
+};
+
+// Legacy hook for backward compatibility
+export const useProjectCount = () => {
+  const { count, isLoading } = useSearchCount();
   return { count, isLoading };
 };
