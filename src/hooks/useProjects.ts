@@ -3,27 +3,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 
 export interface Project {
-  id: string;
+  id: number;
   user_id: string;
-  name: string;
-  base_alloy: string;
-  input_data: unknown;
-  result_data: unknown;
-  status: string | null;
-  performance_gain: number | null;
-  cost_delta: number | null;
+  alloy_name: string;
+  redesigned_data: unknown;
   created_at: string;
-  updated_at: string;
 }
 
 export interface CreateProjectData {
-  name: string;
-  base_alloy: string;
-  input_data: unknown;
-  result_data: unknown;
-  performance_gain?: number;
-  cost_delta?: number;
-  status?: string;
+  alloy_name: string;
+  redesigned_data: unknown;
 }
 
 export const useProjects = () => {
@@ -64,13 +53,8 @@ export const useProjects = () => {
         .from("alloy_data")
         .insert([{
           user_id: user.id,
-          name: projectData.name,
-          base_alloy: projectData.base_alloy,
-          input_data: projectData.input_data,
-          result_data: projectData.result_data,
-          performance_gain: projectData.performance_gain,
-          cost_delta: projectData.cost_delta,
-          status: projectData.status || 'completed',
+          alloy_name: projectData.alloy_name,
+          redesigned_data: projectData.redesigned_data,
         }])
         .select()
         .single();
@@ -109,17 +93,11 @@ export const useProjects = () => {
 
       if (previousProjects) {
         const optimisticProject: Project = {
-          id: `temp-${Date.now()}`,
+          id: Date.now(),
           user_id: user?.id || '',
-          name: newProject.name,
-          base_alloy: newProject.base_alloy,
-          input_data: newProject.input_data,
-          result_data: newProject.result_data,
-          status: newProject.status || 'completed',
-          performance_gain: newProject.performance_gain || null,
-          cost_delta: newProject.cost_delta || null,
+          alloy_name: newProject.alloy_name,
+          redesigned_data: newProject.redesigned_data,
           created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
         };
         
         queryClient.setQueryData<Project[]>(

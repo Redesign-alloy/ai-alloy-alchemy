@@ -9,7 +9,7 @@ import { AlloyData } from "@/types/alloy";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useProjects } from "@/hooks/useProjects";
-import type { Json } from "@/integrations/supabase/types";
+
 
 type ProcessingStatus = "idle" | "processing" | "success" | "error";
 
@@ -84,21 +84,12 @@ const handleSubmit = async (data: AlloyData) => {
     if (!result || !currentInput || !user) return;
 
     try {
-      // Map metrics from the finalized backend structure
-      const redesignedAlloy = result.data?.redesigned_alloy || result.data;
-      const summary = result.data?.analysis_summary || result.data?.summary;
-      
-      const performanceGain = summary?.performance_gain_percent || 0;
-      const costDelta = summary?.cost_change_percent || 0;
-
       await createProject({
-        name: `${currentInput.original_alloy.name} Optimized`,
-        base_alloy: currentInput.original_alloy.name,
-        input_data: currentInput as unknown as Json,
-        result_data: result as unknown as Json,
-        performance_gain: performanceGain,
-        cost_delta: costDelta,
-        status: "completed",
+        alloy_name: currentInput.original_alloy.name || 'Unnamed Alloy',
+        redesigned_data: {
+          input: currentInput,
+          result: result,
+        },
       });
 
       toast({
