@@ -28,19 +28,14 @@ const History = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   const filteredProjects = projects.filter((project) =>
-    project.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    project.base_alloy?.toLowerCase().includes(searchQuery.toLowerCase())
+    project.alloy_name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const handleExportCSV = () => {
-    const headers = ["Date", "Project Name", "Base Alloy", "Status", "Performance Gain", "Cost Delta"];
+    const headers = ["Date", "Alloy Name"];
     const rows = filteredProjects.map((p) => [
       format(new Date(p.created_at), "yyyy-MM-dd"),
-      p.name,
-      p.base_alloy,
-      p.status || "N/A",
-      p.performance_gain ? `${p.performance_gain}%` : "N/A",
-      p.cost_delta ? `${p.cost_delta}%` : "N/A",
+      p.alloy_name,
     ]);
 
     const csvContent = [headers, ...rows].map((row) => row.join(",")).join("\n");
@@ -51,6 +46,18 @@ const History = () => {
     a.download = `alloy-projects-${format(new Date(), "yyyy-MM-dd")}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  // Helper to extract data from redesigned_data
+  const getResultSummary = (project: Project) => {
+    const data = project.redesigned_data as any;
+    const result = data?.result?.data || data?.result || {};
+    const summary = result?.analysis_summary || result?.summary || {};
+    return {
+      performanceGain: summary?.performance_gain_percent,
+      costDelta: summary?.cost_change_percent,
+      status: result?.status || 'completed',
+    };
   };
 
   return (
@@ -89,7 +96,7 @@ const History = () => {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                placeholder="Search by project name or base alloy..."
+                placeholder="Search by alloy name..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10"
@@ -130,42 +137,43 @@ const History = () => {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Date</TableHead>
-                      <TableHead>Project Name</TableHead>
-                      <TableHead>Base Alloy</TableHead>
+                      <TableHead>Alloy Name</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Performance</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredProjects.map((project) => (
-                      <TableRow key={project.id} className="animate-in fade-in-0 duration-300">
-                        <TableCell>{format(new Date(project.created_at), "MMM dd, yyyy")}</TableCell>
-                        <TableCell className="font-medium">{project.name}</TableCell>
-                        <TableCell>{project.base_alloy}</TableCell>
-                        <TableCell>
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            project.status === 'completed' 
-                              ? 'bg-success/10 text-success' 
-                              : 'bg-muted text-muted-foreground'
-                          }`}>
-                            {project.status || 'pending'}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          {project.performance_gain ? (
-                            <span className="text-success font-medium">+{project.performance_gain}%</span>
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button variant="ghost" size="sm" onClick={() => { setSelectedProject(project); setIsDialogOpen(true); }}>
-                            <Eye className="w-4 h-4 mr-2" /> View Report
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {filteredProjects.map((project) => {
+                      const summary = getResultSummary(project);
+                      return (
+                        <TableRow key={project.id} className="animate-in fade-in-0 duration-300">
+                          <TableCell>{format(new Date(project.created_at), "MMM dd, yyyy")}</TableCell>
+                          <TableCell className="font-medium">{project.alloy_name}</TableCell>
+                          <TableCell>
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              summary.status === 'success' || summary.status === 'completed'
+                                ? 'bg-success/10 text-success' 
+                                : 'bg-muted text-muted-foreground'
+                            }`}>
+                              {summary.status}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            {summary.performanceGain ? (
+                              <span className="text-success font-medium">+{summary.performanceGain}%</span>
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button variant="ghost" size="sm" onClick={() => { setSelectedProject(project); setIsDialogOpen(true); }}>
+                              <Eye className="w-4 h-4 mr-2" /> View Report
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>
@@ -176,23 +184,25 @@ const History = () => {
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Details for {selectedProject?.name}</DialogTitle>
+              <DialogTitle>Details for {selectedProject?.alloy_name}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-4 bg-muted rounded-lg">
-                  <div className="text-sm text-muted-foreground mb-1">Base Alloy</div>
-                  <div className="font-medium">{selectedProject?.base_alloy}</div>
+                  <div className="text-sm text-muted-foreground mb-1">Alloy Name</div>
+                  <div className="font-medium">{selectedProject?.alloy_name}</div>
                 </div>
                 <div className="p-4 bg-muted rounded-lg">
-                  <div className="text-sm text-muted-foreground mb-1">Status</div>
-                  <div className="font-medium">{selectedProject?.status || 'pending'}</div>
+                  <div className="text-sm text-muted-foreground mb-1">Created At</div>
+                  <div className="font-medium">
+                    {selectedProject?.created_at && format(new Date(selectedProject.created_at), "PPpp")}
+                  </div>
                 </div>
               </div>
               <div className="p-4 bg-muted rounded-lg">
-                <div className="text-sm text-muted-foreground mb-2">Result Data</div>
+                <div className="text-sm text-muted-foreground mb-2">Redesigned Data</div>
                 <pre className="text-xs overflow-x-auto whitespace-pre-wrap">
-                  {JSON.stringify(selectedProject?.result_data, null, 2)}
+                  {JSON.stringify(selectedProject?.redesigned_data, null, 2)}
                 </pre>
               </div>
             </div>
