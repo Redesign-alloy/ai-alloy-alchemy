@@ -12,7 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useSearchCount } from "@/hooks/useProjects";
 
-interface Profile {
+interface UserProfile {
   full_name: string | null;
   company: string | null;
   role: string | null;
@@ -23,7 +23,7 @@ const Settings = () => {
   const { toast } = useToast();
   const { count: searchCount, isLoading: searchCountLoading } = useSearchCount();
   
-  const [profile, setProfile] = useState<Profile>({ full_name: "", company: "", role: "" });
+  const [profile, setProfile] = useState<UserProfile>({ full_name: "", company: "", role: "" });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   
@@ -45,13 +45,14 @@ const Settings = () => {
 
   const fetchProfile = async () => {
     try {
-      const { data, error } = await supabase
-        .from("profiles")
+      // Use external Supabase 'users' table instead of 'profiles'
+      const { data, error } = await (supabase as any)
+        .from("users")
         .select("full_name, company, role")
-        .eq("user_id", user?.id)
-        .single();
+        .eq("id", user?.id)
+        .maybeSingle();
 
-      if (error && error.code !== "PGRST116") throw error;
+      if (error) throw error;
       if (data) setProfile(data);
     } catch (error) {
       console.error("Error fetching profile:", error);
@@ -63,31 +64,35 @@ const Settings = () => {
   const handleSaveProfile = async () => {
     setSaving(true);
     try {
-      const { data: existingProfile } = await supabase
-        .from("profiles")
+      // Use external Supabase 'users' table instead of 'profiles'
+      const { data: existingUser } = await (supabase as any)
+        .from("users")
         .select("id")
-        .eq("user_id", user?.id)
-        .single();
+        .eq("id", user?.id)
+        .maybeSingle();
 
-      if (existingProfile) {
-        const { error } = await supabase
-          .from("profiles")
+      if (existingUser) {
+        const { error } = await (supabase as any)
+          .from("users")
           .update({
             full_name: profile.full_name,
             company: profile.company,
             role: profile.role,
           })
-          .eq("user_id", user?.id);
+          .eq("id", user?.id);
 
         if (error) throw error;
       } else {
-        const { error } = await supabase
-          .from("profiles")
+        // Create user record if it doesn't exist
+        const { error } = await (supabase as any)
+          .from("users")
           .insert({
-            user_id: user?.id,
+            id: user?.id,
+            email: user?.email,
             full_name: profile.full_name,
             company: profile.company,
             role: profile.role,
+            search_count: 0,
           });
 
         if (error) throw error;
