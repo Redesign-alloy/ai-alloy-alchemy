@@ -77,38 +77,48 @@ export const PropertyAnalysis = ({ result, inputData }: PropertyAnalysisProps) =
   const xAxisOption = availableProperties.find(p => p.key === xAxisProperty) || availableProperties[0];
   const yAxisOption = availableProperties.find(p => p.key === yAxisProperty) || availableProperties[1];
 
-  // ASHBY PLOT DATA
+  // ASHBY PLOT DATA - Use the raw ashby data directly with its properties
   const ashbyData = useMemo(() => {
     const rawAshby = chartRoot?.ashby || [];
     
     if (Array.isArray(rawAshby) && rawAshby.length > 0) {
-      return rawAshby.map((point: any) => ({
-        ...point,
-        [xAxisProperty]: point.x,
-        [yAxisProperty]: point.y,
-      }));
+      // The API returns data with properties directly: yield_strength, tensile_strength, density, estimated_cost
+      // No need to map x/y - the chart uses dataKey props to read the correct properties
+      return rawAshby;
     }
     return [];
-  }, [chartRoot, xAxisProperty, yAxisProperty]);
+  }, [chartRoot]);
 
-  // TTT & COOLING DATA
+  // TTT & COOLING DATA - Merge curve and cooling data for overlay
   const mergedTTTData = useMemo(() => {
     const tttCurve = chartRoot?.ttt?.curve || [];
     const coolingCurve = chartRoot?.ttt?.cooling || [];
 
-    if (tttCurve.length === 0) return [];
+    // Handle both flat and nested structures
+    const curveData = Array.isArray(tttCurve) ? tttCurve : [];
+    const coolingData = Array.isArray(coolingCurve) ? coolingCurve : [];
+
+    if (curveData.length === 0 && coolingData.length === 0) return [];
 
     const timeMap = new Map();
 
-    tttCurve.forEach((point: any) => {
-      timeMap.set(point.time, { ...point });
+    // Add TTT curve points
+    curveData.forEach((point: any) => {
+      const time = Number(point.time);
+      if (!isNaN(time)) {
+        timeMap.set(time, { time, temp: Number(point.temp), phases: point.phases });
+      }
     });
 
-    coolingCurve.forEach((point: any) => {
-      if (timeMap.has(point.time)) {
-        timeMap.get(point.time).coolingTemp = point.temp;
-      } else {
-        timeMap.set(point.time, { time: point.time, coolingTemp: point.temp });
+    // Add cooling path points
+    coolingData.forEach((point: any) => {
+      const time = Number(point.time);
+      if (!isNaN(time)) {
+        if (timeMap.has(time)) {
+          timeMap.get(time).coolingTemp = Number(point.temp);
+        } else {
+          timeMap.set(time, { time, coolingTemp: Number(point.temp) });
+        }
       }
     });
 
