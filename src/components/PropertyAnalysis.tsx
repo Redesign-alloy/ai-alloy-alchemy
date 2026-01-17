@@ -89,40 +89,27 @@ export const PropertyAnalysis = ({ result, inputData }: PropertyAnalysisProps) =
     return [];
   }, [chartRoot]);
 
-  // TTT & COOLING DATA - Merge curve and cooling data for overlay
-  const mergedTTTData = useMemo(() => {
+  // TTT CURVE DATA - Keep separate for proper display
+  const tttCurveData = useMemo(() => {
     const tttCurve = chartRoot?.ttt?.curve || [];
-    const coolingCurve = chartRoot?.ttt?.cooling || [];
-
-    // Handle both flat and nested structures
     const curveData = Array.isArray(tttCurve) ? tttCurve : [];
+    
+    return curveData.map((point: any) => ({
+      time: Number(point.time),
+      temp: Number(point.temp),
+      phases: point.phases || ''
+    })).sort((a, b) => a.time - b.time);
+  }, [chartRoot]);
+
+  // COOLING PATH DATA - Keep separate for proper display
+  const coolingPathData = useMemo(() => {
+    const coolingCurve = chartRoot?.ttt?.cooling || chartRoot?.ttt?.cooling_path || [];
     const coolingData = Array.isArray(coolingCurve) ? coolingCurve : [];
-
-    if (curveData.length === 0 && coolingData.length === 0) return [];
-
-    const timeMap = new Map();
-
-    // Add TTT curve points
-    curveData.forEach((point: any) => {
-      const time = Number(point.time);
-      if (!isNaN(time)) {
-        timeMap.set(time, { time, temp: Number(point.temp), phases: point.phases });
-      }
-    });
-
-    // Add cooling path points
-    coolingData.forEach((point: any) => {
-      const time = Number(point.time);
-      if (!isNaN(time)) {
-        if (timeMap.has(time)) {
-          timeMap.get(time).coolingTemp = Number(point.temp);
-        } else {
-          timeMap.set(time, { time, coolingTemp: Number(point.temp) });
-        }
-      }
-    });
-
-    return Array.from(timeMap.values()).sort((a, b) => a.time - b.time);
+    
+    return coolingData.map((point: any) => ({
+      time: Number(point.time),
+      temp: Number(point.temp)
+    })).sort((a, b) => a.time - b.time);
   }, [chartRoot]);
 
   // ANIMATED GLOWING STAR for redesigned alloy
@@ -218,14 +205,23 @@ export const PropertyAnalysis = ({ result, inputData }: PropertyAnalysisProps) =
 
   const TTTTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
+      const data = payload[0]?.payload;
+      const phases = data?.phases;
+      
       return (
-        <div className="bg-popover/95 backdrop-blur-sm border border-border rounded-xl shadow-2xl p-4">
-          <p className="font-bold text-foreground mb-2">Time: {payload[0]?.payload?.time}s</p>
+        <div className="bg-popover/95 backdrop-blur-sm border border-border rounded-xl shadow-2xl p-4 max-w-xs">
+          <p className="font-bold text-foreground mb-2">Time: {data?.time}s</p>
           {payload.map((entry: any, index: number) => (
             <p key={index} className="text-sm" style={{ color: entry.stroke }}>
               {entry.name}: <span className="font-semibold">{entry.value?.toFixed(0)}°C</span>
             </p>
           ))}
+          {phases && (
+            <div className="mt-2 pt-2 border-t border-border">
+              <p className="text-xs font-medium text-muted-foreground uppercase mb-1">Phase(s)</p>
+              <p className="text-sm font-medium text-primary">{phases}</p>
+            </div>
+          )}
         </div>
       );
     }
@@ -369,12 +365,14 @@ export const PropertyAnalysis = ({ result, inputData }: PropertyAnalysisProps) =
           {/* Chart */}
           <div className="h-[450px] w-full rounded-xl bg-gradient-to-br from-orange-500/5 to-amber-500/5 p-4">
             <ResponsiveContainer>
-              <LineChart data={mergedTTTData} margin={{ top: 20, right: 30, bottom: 30, left: 30 }}>
+              <LineChart margin={{ top: 20, right: 30, bottom: 30, left: 30 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.5} />
                 <XAxis 
                   dataKey="time" 
                   scale="log" 
                   domain={['auto', 'auto']}
+                  type="number"
+                  allowDataOverflow
                   tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
                   axisLine={{ stroke: 'hsl(var(--border))' }}
                   label={{ value: 'Time (seconds, log scale)', position: 'bottom', offset: 10, fill: 'hsl(var(--foreground))' }}
@@ -391,27 +389,31 @@ export const PropertyAnalysis = ({ result, inputData }: PropertyAnalysisProps) =
                   formatter={(value) => <span className="text-foreground font-medium">{value}</span>}
                 />
                 
-                {/* TTT Curve - solid orange line */}
+                {/* TTT Curve - solid orange line with phase data */}
                 <Line 
+                  data={tttCurveData}
                   type="monotone" 
                   dataKey="temp" 
                   stroke="#f97316" 
                   name="TTT Curve" 
                   strokeWidth={3} 
-                  dot={{ r: 4, fill: '#f97316', strokeWidth: 0 }}
-                  activeDot={{ r: 6, fill: '#f97316', stroke: '#fff', strokeWidth: 2 }}
+                  dot={{ r: 5, fill: '#f97316', strokeWidth: 0 }}
+                  activeDot={{ r: 8, fill: '#f97316', stroke: '#fff', strokeWidth: 2 }}
+                  connectNulls
                 />
                 
                 {/* Cooling Path - dashed primary colored line */}
                 <Line 
+                  data={coolingPathData}
                   type="monotone" 
-                  dataKey="coolingTemp" 
+                  dataKey="temp" 
                   stroke="hsl(var(--primary))" 
                   name="Cooling Path" 
                   strokeDasharray="8 4" 
                   strokeWidth={4}
-                  dot={false}
+                  dot={{ r: 4, fill: 'hsl(var(--primary))', strokeWidth: 0 }}
                   activeDot={{ r: 6, fill: 'hsl(var(--primary))', stroke: '#fff', strokeWidth: 2 }}
+                  connectNulls
                 />
                 
                 {/* Ms Line (Martensite Start) */}

@@ -68,7 +68,7 @@ export const useProjects = () => {
           .from("users")
           .select("search_count")
           .eq("id", user.id)
-          .single();
+          .maybeSingle();
         
         const currentCount = userData?.search_count || 0;
         
@@ -144,7 +144,7 @@ export const useSearchCount = () => {
         .from("users")
         .select("search_count")
         .eq("id", user.id)
-        .single();
+        .maybeSingle();
 
       if (error) {
         console.error("Error fetching search count:", error);
