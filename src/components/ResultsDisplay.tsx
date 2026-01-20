@@ -223,7 +223,7 @@ export const ResultsDisplay = ({ result, isLoading, inputData }: ResultsDisplayP
     setChatResponse(null);
     
     try {
-      const response = await fetch('https://tejanaidu5.app.n8n.cloud/webhook/ask-results', {
+      const response = await fetch('https://tejanaidu6.app.n8n.cloud/webhook/ask-results', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
