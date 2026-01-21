@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { externalSupabase } from "@/lib/externalSupabase";
 import { useAuth } from "@/hooks/useAuth";
 
 export interface Project {
@@ -30,7 +30,7 @@ export const useProjects = () => {
     queryFn: async () => {
       if (!user?.id) return [];
       
-      const { data, error } = await (supabase as any)
+      const { data, error } = await externalSupabase
         .from("alloy_data")
         .select("*")
         .eq("user_id", user.id)
@@ -49,7 +49,7 @@ export const useProjects = () => {
     mutationFn: async (projectData: CreateProjectData) => {
       if (!user?.id) throw new Error("User not authenticated");
       
-      const { data, error } = await (supabase as any)
+      const { data, error } = await externalSupabase
         .from("alloy_data")
         .insert([{
           user_id: user.id,
@@ -64,7 +64,7 @@ export const useProjects = () => {
       // Increment search_count in users table
       try {
         // First get current count
-        const { data: userData } = await (supabase as any)
+        const { data: userData } = await externalSupabase
           .from("users")
           .select("search_count")
           .eq("id", user.id)
@@ -73,7 +73,7 @@ export const useProjects = () => {
         const currentCount = userData?.search_count || 0;
         
         // Update with incremented count
-        await (supabase as any)
+        await externalSupabase
           .from("users")
           .update({ search_count: currentCount + 1 })
           .eq("id", user.id);
@@ -140,7 +140,7 @@ export const useSearchCount = () => {
     queryFn: async () => {
       if (!user?.id) return 0;
       
-      const { data, error } = await (supabase as any)
+      const { data, error } = await externalSupabase
         .from("users")
         .select("search_count")
         .eq("id", user.id)
