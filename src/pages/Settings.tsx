@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { User, BarChart3, Loader2, Lock, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { externalSupabase } from "@/lib/externalSupabase";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useSearchCount } from "@/hooks/useProjects";
@@ -45,8 +46,8 @@ const Settings = () => {
 
   const fetchProfile = async () => {
     try {
-      // Use external Supabase 'users' table instead of 'profiles'
-      const { data, error } = await (supabase as any)
+      // Use external Supabase 'users' table
+      const { data, error } = await externalSupabase
         .from("users")
         .select("full_name, company, role")
         .eq("id", user?.id)
@@ -64,15 +65,15 @@ const Settings = () => {
   const handleSaveProfile = async () => {
     setSaving(true);
     try {
-      // Use external Supabase 'users' table instead of 'profiles'
-      const { data: existingUser } = await (supabase as any)
+      // Use external Supabase 'users' table
+      const { data: existingUser } = await externalSupabase
         .from("users")
         .select("id")
         .eq("id", user?.id)
         .maybeSingle();
 
       if (existingUser) {
-        const { error } = await (supabase as any)
+        const { error } = await externalSupabase
           .from("users")
           .update({
             full_name: profile.full_name,
@@ -84,7 +85,7 @@ const Settings = () => {
         if (error) throw error;
       } else {
         // Create user record if it doesn't exist
-        const { error } = await (supabase as any)
+        const { error } = await externalSupabase
           .from("users")
           .insert({
             id: user?.id,
