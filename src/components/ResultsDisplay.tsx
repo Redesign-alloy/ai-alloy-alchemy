@@ -21,7 +21,9 @@ import {
   Shield,
   MessageCircle,
   Send,
-  Loader2
+  Loader2,
+  X,
+  Info
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -66,6 +68,10 @@ export const ResultsDisplay = ({ result, isLoading, inputData }: ResultsDisplayP
   const [isAskingQuestion, setIsAskingQuestion] = useState(false);
   const [chatResponse, setChatResponse] = useState<string | null>(null);
   const [currentQuote, setCurrentQuote] = useState(0);
+  
+  // Expandable detail sections state
+  const [expandedProbability, setExpandedProbability] = useState(false);
+  const [expandedSustainability, setExpandedSustainability] = useState(false);
 
   // Handle both nested (result.data.redesigned_alloy) and flat (result.data) structures
   const apiData = result?.data;
@@ -81,6 +87,15 @@ export const ResultsDisplay = ({ result, isLoading, inputData }: ResultsDisplayP
   const estimatedCost = alloy?.estimated_cost_per_kg;
   const sustainabilityScore = alloy?.sustainability_score;
   const probabilityOfSuccess = alloy?.probability_of_success;
+  
+  // Extract supporting text/details for probability and sustainability
+  const probabilityDetails = alloy?.probability_rationale || alloy?.success_rationale || 
+    alloy?.probability_details || summary?.probability_explanation || 
+    "This score represents the likelihood of achieving the predicted properties based on metallurgical principles, thermodynamic calculations, and historical data from similar alloy compositions.";
+  
+  const sustainabilityDetails = alloy?.sustainability_rationale || alloy?.sustainability_details || 
+    alloy?.environmental_impact_details || summary?.sustainability_explanation ||
+    `Environmental impact change: ${summary?.environmental_impact_change !== undefined ? summary.environmental_impact_change : 'N/A'}. This score evaluates the environmental footprint considering material sourcing, energy requirements for processing, recyclability, and lifecycle impact.`;
 
   // Rotate quotes during loading
   useEffect(() => {
@@ -354,15 +369,23 @@ export const ResultsDisplay = ({ result, isLoading, inputData }: ResultsDisplayP
                 )}
               </div>
 
-              {/* Success Score Progress Bars */}
+              {/* Success Score Progress Bars - Double-click to expand details */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Probability of Success */}
+                {/* Probability of Success - Expandable on double-click */}
                 {probabilityOfSuccess !== undefined && (
-                  <div className="space-y-2" style={{ opacity: 1 }}>
+                  <div 
+                    className={`relative space-y-2 p-3 rounded-xl cursor-pointer transition-all duration-300 ${
+                      expandedProbability ? '' : 'hover:bg-primary/5'
+                    }`}
+                    style={{ opacity: 1 }}
+                    onDoubleClick={() => setExpandedProbability(true)}
+                    title="Double-click for details"
+                  >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <Target className="w-4 h-4 text-primary" />
                         <span className="text-sm font-medium text-muted-foreground">Success Probability</span>
+                        <Info className="w-3 h-3 text-muted-foreground/50" />
                       </div>
                       <span className="text-lg font-bold text-primary">
                         {(probabilityOfSuccess * 100).toFixed(0)}%
@@ -374,16 +397,62 @@ export const ResultsDisplay = ({ result, isLoading, inputData }: ResultsDisplayP
                         style={{ width: `${probabilityOfSuccess * 100}%`, opacity: 1 }}
                       />
                     </div>
+                    {!expandedProbability && (
+                      <p className="text-xs text-muted-foreground/60 text-center mt-1">Double-click for details</p>
+                    )}
+                    
+                    {/* Expanded Details Modal Overlay */}
+                    {expandedProbability && (
+                      <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm" onClick={() => setExpandedProbability(false)}>
+                        <div className="relative max-w-md w-full mx-4 p-6 rounded-2xl bg-card border border-border shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="absolute top-3 right-3"
+                            onClick={() => setExpandedProbability(false)}
+                          >
+                            <X className="w-5 h-5" />
+                          </Button>
+                          <div className="flex items-center gap-3 mb-4">
+                            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center">
+                              <Target className="w-6 h-6 text-primary-foreground" />
+                            </div>
+                            <div>
+                              <h3 className="text-xl font-bold text-foreground">Success Probability</h3>
+                              <p className="text-3xl font-bold text-primary">{(probabilityOfSuccess * 100).toFixed(0)}%</p>
+                            </div>
+                          </div>
+                          <div className="h-3 bg-muted rounded-full overflow-hidden mb-4">
+                            <div 
+                              className="h-full bg-gradient-to-r from-primary to-accent rounded-full"
+                              style={{ width: `${probabilityOfSuccess * 100}%` }}
+                            />
+                          </div>
+                          <div className="p-4 rounded-xl bg-muted/50 border border-border">
+                            <p className="text-sm text-muted-foreground font-medium mb-2">Details & Rationale</p>
+                            <p className="text-sm text-foreground leading-relaxed">{probabilityDetails}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
-                {/* Sustainability Score */}
+                {/* Sustainability Score - Expandable on double-click */}
                 {sustainabilityScore !== undefined && (
-                  <div className="space-y-2" style={{ opacity: 1 }}>
+                  <div 
+                    className={`relative space-y-2 p-3 rounded-xl cursor-pointer transition-all duration-300 ${
+                      expandedSustainability ? '' : 'hover:bg-green-500/5'
+                    }`}
+                    style={{ opacity: 1 }}
+                    onDoubleClick={() => setExpandedSustainability(true)}
+                    title="Double-click for details"
+                  >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <Leaf className="w-4 h-4 text-green-500" />
                         <span className="text-sm font-medium text-muted-foreground">Sustainability Score</span>
+                        <Info className="w-3 h-3 text-muted-foreground/50" />
                       </div>
                       <span className="text-lg font-bold text-green-500">
                         {(sustainabilityScore * 100).toFixed(0)}%
@@ -395,6 +464,44 @@ export const ResultsDisplay = ({ result, isLoading, inputData }: ResultsDisplayP
                         style={{ width: `${sustainabilityScore * 100}%`, opacity: 1 }}
                       />
                     </div>
+                    {!expandedSustainability && (
+                      <p className="text-xs text-muted-foreground/60 text-center mt-1">Double-click for details</p>
+                    )}
+                    
+                    {/* Expanded Details Modal Overlay */}
+                    {expandedSustainability && (
+                      <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm" onClick={() => setExpandedSustainability(false)}>
+                        <div className="relative max-w-md w-full mx-4 p-6 rounded-2xl bg-card border border-border shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="absolute top-3 right-3"
+                            onClick={() => setExpandedSustainability(false)}
+                          >
+                            <X className="w-5 h-5" />
+                          </Button>
+                          <div className="flex items-center gap-3 mb-4">
+                            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center">
+                              <Leaf className="w-6 h-6 text-white" />
+                            </div>
+                            <div>
+                              <h3 className="text-xl font-bold text-foreground">Sustainability Score</h3>
+                              <p className="text-3xl font-bold text-green-500">{(sustainabilityScore * 100).toFixed(0)}%</p>
+                            </div>
+                          </div>
+                          <div className="h-3 bg-muted rounded-full overflow-hidden mb-4">
+                            <div 
+                              className="h-full bg-gradient-to-r from-green-400 to-emerald-500 rounded-full"
+                              style={{ width: `${sustainabilityScore * 100}%` }}
+                            />
+                          </div>
+                          <div className="p-4 rounded-xl bg-muted/50 border border-border">
+                            <p className="text-sm text-muted-foreground font-medium mb-2">Details & Environmental Impact</p>
+                            <p className="text-sm text-foreground leading-relaxed">{sustainabilityDetails}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 

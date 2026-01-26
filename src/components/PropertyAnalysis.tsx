@@ -89,15 +89,16 @@ export const PropertyAnalysis = ({ result, inputData }: PropertyAnalysisProps) =
     return [];
   }, [chartRoot]);
 
-  // TTT CURVE DATA - Keep separate for proper display
+  // TTT CURVE DATA - Keep all phase data for dynamic display
   const tttCurveData = useMemo(() => {
     const tttCurve = chartRoot?.ttt?.curve || [];
     const curveData = Array.isArray(tttCurve) ? tttCurve : [];
     
+    // Keep ALL data from the webhook response, including phases
     return curveData.map((point: any) => ({
       time: Number(point.time),
       temp: Number(point.temp),
-      phases: point.phases || ''
+      phases: point.phases || point.phase || '' // Support both 'phases' and 'phase' keys
     })).sort((a, b) => a.time - b.time);
   }, [chartRoot]);
 
@@ -108,7 +109,8 @@ export const PropertyAnalysis = ({ result, inputData }: PropertyAnalysisProps) =
     
     return coolingData.map((point: any) => ({
       time: Number(point.time),
-      temp: Number(point.temp)
+      temp: Number(point.temp),
+      phases: point.phases || point.phase || '' // Include phases if present in cooling data
     })).sort((a, b) => a.time - b.time);
   }, [chartRoot]);
 
@@ -205,21 +207,27 @@ export const PropertyAnalysis = ({ result, inputData }: PropertyAnalysisProps) =
 
   const TTTTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
-      const data = payload[0]?.payload;
-      const phases = data?.phases;
+      // Get the data from the first payload item (could be from TTT curve or cooling path)
+      const tttPayload = payload.find((p: any) => p.name === 'TTT Curve');
+      const coolingPayload = payload.find((p: any) => p.name === 'Cooling Path');
+      
+      // Get phases from TTT curve data (phases are on the curve, not cooling path)
+      const phases = tttPayload?.payload?.phases || '';
+      const time = tttPayload?.payload?.time || coolingPayload?.payload?.time;
       
       return (
-        <div className="bg-popover/95 backdrop-blur-sm border border-border rounded-xl shadow-2xl p-4 max-w-xs">
-          <p className="font-bold text-foreground mb-2">Time: {data?.time}s</p>
+        <div className="bg-popover/95 backdrop-blur-sm border border-border rounded-xl shadow-2xl p-4 max-w-sm">
+          <p className="font-bold text-foreground mb-2">Time: {time}s</p>
           {payload.map((entry: any, index: number) => (
             <p key={index} className="text-sm" style={{ color: entry.stroke }}>
               {entry.name}: <span className="font-semibold">{entry.value?.toFixed(0)}°C</span>
             </p>
           ))}
+          {/* ALWAYS show phases section - dynamically display the phase at this point */}
           {phases && (
-            <div className="mt-2 pt-2 border-t border-border">
-              <p className="text-xs font-medium text-muted-foreground uppercase mb-1">Phase(s)</p>
-              <p className="text-sm font-medium text-primary">{phases}</p>
+            <div className="mt-3 pt-3 border-t border-border">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Phase(s) at this point</p>
+              <p className="text-sm font-medium text-primary leading-relaxed">{phases}</p>
             </div>
           )}
         </div>
@@ -428,12 +436,41 @@ export const PropertyAnalysis = ({ result, inputData }: PropertyAnalysisProps) =
             </ResponsiveContainer>
           </div>
           
+          {/* Phase Information Table - Shows all phases from the TTT data */}
+          {tttCurveData.length > 0 && tttCurveData.some((d: any) => d.phases) && (
+            <div className="mt-4 p-4 rounded-xl bg-orange-500/5 border border-orange-500/20">
+              <p className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+                <Thermometer className="w-4 h-4 text-orange-500" />
+                Phase Transformations at Key Time-Temperature Points
+              </p>
+              <div className="grid gap-2">
+                {tttCurveData.filter((d: any) => d.phases).map((point: any, idx: number) => (
+                  <div key={idx} className="flex items-start gap-3 p-2 rounded-lg bg-background/50 border border-border/30">
+                    <div className="flex-shrink-0 flex flex-col items-center gap-1">
+                      <span className="text-xs font-medium text-muted-foreground">Time</span>
+                      <span className="text-sm font-bold text-orange-600">{point.time}s</span>
+                    </div>
+                    <div className="flex-shrink-0 flex flex-col items-center gap-1 border-l border-border pl-3">
+                      <span className="text-xs font-medium text-muted-foreground">Temp</span>
+                      <span className="text-sm font-bold text-red-500">{point.temp}°C</span>
+                    </div>
+                    <div className="flex-1 border-l border-border pl-3">
+                      <span className="text-xs font-medium text-muted-foreground">Phase(s)</span>
+                      <p className="text-sm text-foreground leading-relaxed">{point.phases}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          
           {/* Interpretation Note */}
           <div className="mt-4 p-4 rounded-xl bg-muted/30 border border-border/50">
             <p className="text-sm text-muted-foreground leading-relaxed">
               <span className="font-semibold text-foreground">Interpretation:</span> The cooling path (dashed line) shows how the alloy temperature decreases during quenching. 
               Where this line intersects or avoids the TTT curve determines the final microstructure. 
               Rapid cooling that "misses" the nose of the TTT curve results in martensitic transformation.
+              <span className="block mt-2 text-xs italic">Hover over any point on the TTT curve to see the phase information at that time-temperature combination.</span>
             </p>
           </div>
         </CardContent>
