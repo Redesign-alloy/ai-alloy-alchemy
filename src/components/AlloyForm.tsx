@@ -363,7 +363,7 @@ export const AlloyForm = ({ onSubmit, isLoading }: AlloyFormProps) => {
 
           {/* Operating Conditions */}
           <div>
-            <Label htmlFor="conditions">Operating Conditions</Label>
+            <Label htmlFor="conditions">Operating Conditions / Problem Faced and Desired Solution (in words)</Label>
             <Textarea
               id="conditions"
               value={operatingConditions}
