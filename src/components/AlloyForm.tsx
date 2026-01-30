@@ -4,10 +4,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Trash2, Sparkles, IndianRupee } from "lucide-react";
+import { Plus, Trash2, Sparkles, IndianRupee, Info } from "lucide-react";
 import { AlloyData, DesiredImprovement, ExampleAlloy, PropertyItem } from "@/types/alloy";
 import { useToast } from "@/hooks/use-toast";
 import { calculateCompositionCost } from "@/lib/elementPrices";
+
+// Instructional hint component
+const SectionHint = ({ children }: { children: React.ReactNode }) => (
+  <p className="flex items-start gap-1.5 text-xs text-muted-foreground mt-1 mb-2">
+    <Info className="w-3 h-3 mt-0.5 flex-shrink-0" />
+    <span>{children}</span>
+  </p>
+);
 
 interface AlloyFormProps {
   onSubmit: (data: AlloyData) => void;
@@ -190,12 +198,14 @@ export const AlloyForm = ({ onSubmit, isLoading }: AlloyFormProps) => {
           {/* Alloy Name */}
           <div>
             <Label htmlFor="alloyName">Alloy Name</Label>
+            <SectionHint>
+              Enter the standard designation (e.g., AISI 4340) or a custom identifier for your material.
+            </SectionHint>
             <Input
               id="alloyName"
               value={alloyName}
               onChange={(e) => setAlloyName(e.target.value)}
               placeholder="e.g., AISI 4340"
-              className="mt-1.5"
             />
           </div>
 
@@ -214,6 +224,9 @@ export const AlloyForm = ({ onSubmit, isLoading }: AlloyFormProps) => {
                 Add Element
               </Button>
             </div>
+            <SectionHint>
+              List the chemical elements and their weight percentages. Ensure the total adds up to approximately 100%.
+            </SectionHint>
             <div className="space-y-2">
               {composition.map((comp, index) => (
                 <div key={index} className="flex gap-2">
@@ -258,6 +271,9 @@ export const AlloyForm = ({ onSubmit, isLoading }: AlloyFormProps) => {
                 Add Property
               </Button>
             </div>
+            <SectionHint>
+              Input the current measured mechanical properties (e.g., Tensile Strength) and their units.
+            </SectionHint>
             <div className="space-y-2">
               {dynamicProperties.map((prop) => (
                 <div key={prop.id} className="flex gap-2">
@@ -325,6 +341,9 @@ export const AlloyForm = ({ onSubmit, isLoading }: AlloyFormProps) => {
                 Add Improvement
               </Button>
             </div>
+            <SectionHint>
+              Specify the target values for the properties you want the AI to enhance.
+            </SectionHint>
             <div className="space-y-2">
               {improvements.map((imp) => (
                 <div key={imp.id} className="flex gap-2">
@@ -364,24 +383,29 @@ export const AlloyForm = ({ onSubmit, isLoading }: AlloyFormProps) => {
           {/* Operating Conditions */}
           <div>
             <Label htmlFor="conditions">Operating Conditions / Problem Faced and Desired Solution (in words)</Label>
+            <SectionHint>
+              Describe the environment (e.g., high heat, salt spray) or the specific failure you're solving.
+            </SectionHint>
             <Textarea
               id="conditions"
               value={operatingConditions}
               onChange={(e) => setOperatingConditions(e.target.value)}
               placeholder="e.g., High temperature (500°C), Corrosive marine environment"
-              className="mt-1.5 min-h-[80px]"
+              className="min-h-[80px]"
             />
           </div>
 
           {/* Max Price Increase */}
           <div>
             <Label htmlFor="maxPrice">Maximum Price Increase (%)</Label>
+            <SectionHint>
+              Set the budget limit for the redesigned alloy relative to the current cost.
+            </SectionHint>
             <Input
               id="maxPrice"
               value={maxPriceIncrease}
               onChange={(e) => setMaxPriceIncrease(e.target.value)}
               placeholder="e.g., 15"
-              className="mt-1.5"
             />
           </div>
 
