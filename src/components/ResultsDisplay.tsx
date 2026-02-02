@@ -77,16 +77,32 @@ export const ResultsDisplay = ({ result, isLoading, inputData }: ResultsDisplayP
   const apiData = result?.data;
   const alloy = apiData?.redesigned_alloy || apiData;
   
-  // Extract all data from the webhook response
+  // Extract all data from the webhook response - parse any stringified JSON
+  const parseIfString = (value: any) => {
+    if (typeof value === 'string') {
+      try {
+        return JSON.parse(value);
+      } catch {
+        return value;
+      }
+    }
+    return value;
+  };
+
   const name = alloy?.name || "Redesigned Alloy";
-  const composition = alloy?.new_composition || {};
-  const properties = alloy?.predicted_properties || {};
-  const heatTreatment = alloy?.heat_treatment_cycle;
-  const improvements = alloy?.achieved_improvements || [];
-  const summary = alloy?.analysis_summary || {};
+  const composition = parseIfString(alloy?.new_composition) || {};
+  const properties = parseIfString(alloy?.predicted_properties) || {};
+  const heatTreatment = parseIfString(alloy?.heat_treatment_cycle);
+  const improvements = parseIfString(alloy?.achieved_improvements) || [];
+  const summary = parseIfString(alloy?.analysis_summary) || {};
   const estimatedCost = alloy?.estimated_cost_per_kg;
   const sustainabilityScore = alloy?.sustainability_score;
   const probabilityOfSuccess = alloy?.probability_of_success;
+  
+  // Extract Ashby and TTT data for display
+  const ashbyData = parseIfString(alloy?.ashby_data) || parseIfString(apiData?.ashby_data) || [];
+  const tttCurveData = parseIfString(alloy?.ttt_curve) || parseIfString(apiData?.ttt_curve) || [];
+  const coolingPathData = parseIfString(alloy?.cooling_path) || parseIfString(apiData?.cooling_path) || [];
   
   // Extract supporting text/details for probability and sustainability
   const probabilityDetails = alloy?.probability_rationale || alloy?.success_rationale || 
@@ -96,6 +112,20 @@ export const ResultsDisplay = ({ result, isLoading, inputData }: ResultsDisplayP
   const sustainabilityDetails = alloy?.sustainability_rationale || alloy?.sustainability_details || 
     alloy?.environmental_impact_details || summary?.sustainability_explanation ||
     `Environmental impact change: ${summary?.environmental_impact_change !== undefined ? summary.environmental_impact_change : 'N/A'}. This score evaluates the environmental footprint considering material sourcing, energy requirements for processing, recyclability, and lifecycle impact.`;
+
+  // Collect any additional/unknown fields for dynamic rendering
+  const knownFields = new Set([
+    'name', 'new_composition', 'predicted_properties', 'heat_treatment_cycle',
+    'achieved_improvements', 'analysis_summary', 'estimated_cost_per_kg',
+    'sustainability_score', 'probability_of_success', 'ashby_data', 'ttt_curve',
+    'cooling_path', 'chart_data', 'probability_rationale', 'success_rationale',
+    'probability_details', 'sustainability_rationale', 'sustainability_details',
+    'environmental_impact_details', 'status'
+  ]);
+  
+  const additionalFields = alloy ? Object.entries(alloy).filter(
+    ([key]) => !knownFields.has(key) && alloy[key] !== undefined && alloy[key] !== null
+  ) : [];
 
   // Rotate quotes during loading
   useEffect(() => {
@@ -254,7 +284,11 @@ export const ResultsDisplay = ({ result, isLoading, inputData }: ResultsDisplayP
           analysis_summary: summary,
           estimated_cost: estimatedCost,
           sustainability_score: sustainabilityScore,
-          probability_of_success: probabilityOfSuccess
+          probability_of_success: probabilityOfSuccess,
+          ashby_data: ashbyData,
+          ttt_curve: tttCurveData,
+          cooling_path: coolingPathData,
+          additional_fields: Object.fromEntries(additionalFields)
         }),
       });
 
@@ -841,20 +875,79 @@ export const ResultsDisplay = ({ result, isLoading, inputData }: ResultsDisplayP
           </div>
         )}
 
-        {/* ====== SECTION 7: Interactive Charts (Ashby & TTT) ====== */}
+        {/* ====== SECTION 7: Additional Dynamic Data ====== */}
+        {additionalFields.length > 0 && (
+          <div 
+            className={slideAnimationClass}
+            style={isPdfMode ? {} : getAnimationDelay(6, 150)}
+          >
+            <Card className="shadow-xl border-border/50 overflow-hidden">
+              <CardHeader className="bg-gradient-to-r from-violet-500/15 via-violet-500/10 to-purple-500/15 border-b border-violet-500/20">
+                <CardTitle className="flex items-center gap-3 text-xl">
+                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-violet-500 to-purple-500 flex items-center justify-center shadow-lg shadow-violet-500/25" style={{ opacity: 1 }}>
+                    <Activity className="w-5 h-5 text-white" />
+                  </div>
+                  Additional Analysis Data
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-6 pb-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {additionalFields.map(([key, value], index) => {
+                    const formattedKey = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                    
+                    // Handle different value types
+                    if (typeof value === 'object' && value !== null) {
+                      return (
+                        <div 
+                          key={key}
+                          className={`p-4 rounded-xl bg-violet-500/5 border border-violet-500/20 col-span-full ${isPdfMode ? '' : 'animate-in fade-in-0 duration-500'}`}
+                          style={isPdfMode ? {} : { animationDelay: `${index * 100}ms` }}
+                        >
+                          <p className="text-xs uppercase tracking-wider text-muted-foreground font-medium mb-2">
+                            {formattedKey}
+                          </p>
+                          <pre className="text-sm text-foreground bg-muted/30 p-3 rounded-lg overflow-x-auto whitespace-pre-wrap">
+                            {JSON.stringify(value, null, 2)}
+                          </pre>
+                        </div>
+                      );
+                    }
+                    
+                    return (
+                      <div 
+                        key={key}
+                        className={`p-4 rounded-xl bg-violet-500/5 border border-violet-500/20 ${isPdfMode ? '' : 'animate-in fade-in-0 duration-500'}`}
+                        style={isPdfMode ? {} : { animationDelay: `${index * 100}ms` }}
+                      >
+                        <p className="text-xs uppercase tracking-wider text-muted-foreground font-medium mb-1">
+                          {formattedKey}
+                        </p>
+                        <p className="text-lg font-semibold text-foreground">
+                          {String(value)}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* ====== SECTION 8: Interactive Charts (Ashby & TTT) ====== */}
         <div 
           className={slideAnimationClass}
-          style={isPdfMode ? {} : getAnimationDelay(6, 150)}
+          style={isPdfMode ? {} : getAnimationDelay(7, 150)}
           id="property-analysis-charts"
         >
           <PropertyAnalysis result={result} inputData={inputData} />
         </div>
       </div>
 
-      {/* ====== SECTION 8: Ask a Question Chat Box ====== */}
+      {/* ====== SECTION 9: Ask a Question Chat Box ====== */}
       <div 
         className="animate-in fade-in-0 slide-in-from-bottom-4 duration-700 mt-8"
-        style={getAnimationDelay(7, 150)}
+        style={getAnimationDelay(8, 150)}
       >
         <Card className="shadow-xl border-border/50 overflow-hidden relative">
           {/* Glowing background effect */}
