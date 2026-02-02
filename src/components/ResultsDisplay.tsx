@@ -23,7 +23,9 @@ import {
   Send,
   Loader2,
   X,
-  Info
+  Info,
+  ExternalLink,
+  Link2
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -944,10 +946,82 @@ export const ResultsDisplay = ({ result, isLoading, inputData }: ResultsDisplayP
         </div>
       </div>
 
-      {/* ====== SECTION 9: Ask a Question Chat Box ====== */}
+      {/* ====== SECTION 9: Sources & References ====== */}
+      {(() => {
+        // Extract sources from various possible locations in the response
+        const sources = alloy?.sources || alloy?.references || alloy?.source_links || 
+                       apiData?.sources || apiData?.references || apiData?.source_links ||
+                       result?.sources || result?.references || [];
+        const sourceArray = Array.isArray(sources) ? sources : (sources ? [sources] : []);
+        
+        if (sourceArray.length === 0) return null;
+        
+        return (
+          <div 
+            className="animate-in fade-in-0 slide-in-from-bottom-4 duration-700 mt-8"
+            style={getAnimationDelay(8, 150)}
+          >
+            <Card className="shadow-xl border-border/50 overflow-hidden relative">
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-transparent to-cyan-500/5 pointer-events-none" />
+              
+              <CardHeader className="bg-gradient-to-r from-blue-500/10 via-blue-500/5 to-cyan-500/10 border-b border-border/50 relative">
+                <CardTitle className="flex items-center gap-3 text-lg">
+                  <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-blue-500/25">
+                    <Link2 className="w-4 h-4 text-white" />
+                  </div>
+                  References & Sources
+                </CardTitle>
+              </CardHeader>
+              
+              <CardContent className="pt-5 pb-5 relative">
+                <div className="flex flex-wrap gap-3">
+                  {sourceArray.map((source: any, index: number) => {
+                    const url = typeof source === 'string' ? source : source?.url || source?.link || source?.href;
+                    const title = typeof source === 'string' 
+                      ? (source.length > 50 ? `Source ${index + 1}` : source)
+                      : source?.title || source?.name || source?.label || `Source ${index + 1}`;
+                    
+                    if (!url) {
+                      // If no URL, just display as text
+                      return (
+                        <span
+                          key={index}
+                          className="inline-flex items-center gap-2 px-4 py-2 text-sm rounded-full bg-muted/50 text-muted-foreground border border-border/50"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          {typeof source === 'string' ? source : JSON.stringify(source)}
+                        </span>
+                      );
+                    }
+                    
+                    return (
+                      <a
+                        key={index}
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 px-4 py-2 text-sm rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 transition-all duration-300 border border-blue-500/20 hover:border-blue-500/40 hover:shadow-lg hover:shadow-blue-500/10 group"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                        <span className="font-medium">{title}</span>
+                      </a>
+                    );
+                  })}
+                </div>
+                
+                <p className="text-xs text-muted-foreground/60 mt-4">
+                  These references were used in the metallurgical analysis. Click to open in a new tab.
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        );
+      })()}
+
+      {/* ====== SECTION 10: Ask a Question Chat Box ====== */}
       <div 
         className="animate-in fade-in-0 slide-in-from-bottom-4 duration-700 mt-8"
-        style={getAnimationDelay(8, 150)}
+        style={getAnimationDelay(9, 150)}
       >
         <Card className="shadow-xl border-border/50 overflow-hidden relative">
           {/* Glowing background effect */}
