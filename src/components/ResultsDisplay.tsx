@@ -592,7 +592,7 @@ export const ResultsDisplay = ({ result, isLoading, inputData }: ResultsDisplayP
                       </span>
                       {/* Percentage */}
                       <span className="text-sm font-semibold text-primary mt-1">
-                        {typeof value === 'number' ? value.toFixed(2) : String(value)}%
+                        {typeof value === 'number' ? value.toFixed(3) : String(value)}%
                       </span>
                     </div>
                   </div>
