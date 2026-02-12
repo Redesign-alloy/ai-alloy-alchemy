@@ -15,7 +15,6 @@ import {
   Microscope,
   Download,
   Flame,
-  Droplets,
   Clock,
   Zap,
   Shield,
@@ -25,7 +24,9 @@ import {
   X,
   Info,
   ExternalLink,
-  Link2
+  Link2,
+  Database,
+  List
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { PropertyAnalysis } from "@/components/PropertyAnalysis";
 import { AlloyData } from "@/types/alloy";
 import { TypingAnimation } from "@/components/TypingAnimation";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 
@@ -59,6 +68,82 @@ const getAnimationDelay = (index: number, baseDelay: number = 100) => ({
   animationDelay: `${index * baseDelay}ms`,
   animationFillMode: 'both' as const
 });
+
+// Format a key string for display
+const formatKey = (key: string) =>
+  key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
+// Recursively render any value with a professional UI
+const DynamicValue = ({ value, depth = 0 }: { value: any; depth?: number }) => {
+  if (value === null || value === undefined) return <span className="text-muted-foreground italic">N/A</span>;
+  if (typeof value === 'boolean') return <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${value ? 'bg-green-500/20 text-green-600' : 'bg-red-500/20 text-red-600'}`}>{value ? 'Yes' : 'No'}</span>;
+  if (typeof value === 'number') return <span className="font-semibold text-foreground">{value}</span>;
+  if (typeof value === 'string') return <span className="text-foreground">{value}</span>;
+
+  // Array of objects → render as table
+  if (Array.isArray(value)) {
+    if (value.length === 0) return <span className="text-muted-foreground italic">Empty</span>;
+    if (typeof value[0] === 'object' && value[0] !== null) {
+      const columns = Array.from(new Set(value.flatMap(item => Object.keys(item))));
+      return (
+        <div className="overflow-auto rounded-lg border border-border/50">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/30">
+                {columns.map(col => (
+                  <TableHead key={col} className="text-xs uppercase tracking-wider font-semibold whitespace-nowrap">
+                    {formatKey(col)}
+                  </TableHead>
+                ))}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {value.map((row, i) => (
+                <TableRow key={i} className="hover:bg-muted/20">
+                  {columns.map(col => (
+                    <TableCell key={col} className="text-sm">
+                      <DynamicValue value={row[col]} depth={depth + 1} />
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      );
+    }
+    // Array of primitives
+    return (
+      <div className="flex flex-wrap gap-2">
+        {value.map((item, i) => (
+          <span key={i} className="px-3 py-1 text-sm rounded-full bg-muted border border-border/50 text-foreground">
+            {String(item)}
+          </span>
+        ))}
+      </div>
+    );
+  }
+
+  // Plain object → render as key-value pairs
+  if (typeof value === 'object') {
+    return (
+      <div className={`space-y-2 ${depth > 0 ? 'pl-3 border-l-2 border-primary/20' : ''}`}>
+        {Object.entries(value).map(([k, v]) => (
+          <div key={k} className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-3">
+            <span className="text-xs uppercase tracking-wider text-muted-foreground font-medium whitespace-nowrap min-w-[120px]">
+              {formatKey(k)}:
+            </span>
+            <div className="flex-1">
+              <DynamicValue value={v} depth={depth + 1} />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return <span>{String(value)}</span>;
+};
 
 export const ResultsDisplay = ({ result, isLoading, inputData }: ResultsDisplayProps) => {
   const reportRef = useRef<HTMLDivElement>(null);
@@ -138,18 +223,16 @@ export const ResultsDisplay = ({ result, isLoading, inputData }: ResultsDisplayP
     return () => clearInterval(interval);
   }, [isAskingQuestion]);
 
-  // High-Resolution PDF Export Handler with proper data hydration
+  // High-Resolution PDF Export Handler
   const handleExportPDF = async () => {
     if (!reportRef.current) return;
     
     setIsExporting(true);
     setIsPdfMode(true);
 
-    // Wait for DOM to fully render with PDF mode styles
     await new Promise(resolve => setTimeout(resolve, 500));
 
     try {
-      // Ensure all images and content are loaded
       await Promise.all([
         document.fonts.ready,
         ...Array.from(reportRef.current.querySelectorAll('img')).map(
@@ -160,11 +243,10 @@ export const ResultsDisplay = ({ result, isLoading, inputData }: ResultsDisplayP
         )
       ]);
 
-      // Additional delay for charts to render
       await new Promise(resolve => setTimeout(resolve, 300));
 
       const canvas = await html2canvas(reportRef.current, {
-        scale: 3, // 3x resolution for sharp printing
+        scale: 3,
         useCORS: true,
         logging: false,
         backgroundColor: '#ffffff',
@@ -182,9 +264,7 @@ export const ResultsDisplay = ({ result, isLoading, inputData }: ResultsDisplayP
       const imgHeight = canvas.height;
       const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
       const imgX = (pdfWidth - imgWidth * ratio) / 2;
-      const imgY = 0;
       
-      // Handle multi-page PDF if content is too long
       const pageHeight = pdfHeight;
       const totalHeight = (imgHeight * ratio);
       let heightLeft = totalHeight;
@@ -211,54 +291,27 @@ export const ResultsDisplay = ({ result, isLoading, inputData }: ResultsDisplayP
 
   // Parse the output field from n8n webhook response
   const parseWebhookOutput = (data: any): string => {
-    // Handle string response
-    if (typeof data === 'string') {
-      return data;
-    }
-    
-    // Primary: Extract from 'output' field (n8n webhook format)
+    if (typeof data === 'string') return data;
     if (data.output) {
-      if (typeof data.output === 'string') {
-        return data.output;
-      }
-      // If output is an object, try to get text from it
-      if (data.output.text) {
-        return data.output.text;
-      }
-      if (data.output.content) {
-        return data.output.content;
-      }
+      if (typeof data.output === 'string') return data.output;
+      if (data.output.text) return data.output.text;
+      if (data.output.content) return data.output.content;
     }
-    
-    // Fallback to other common response formats
     if (data.answer) return data.answer;
     if (data.response) return data.response;
     if (data.message) return data.message;
     if (data.text) return data.text;
     if (data.content) return data.content;
-    
-    // If it's an array with output field
-    if (Array.isArray(data) && data[0]?.output) {
-      return parseWebhookOutput(data[0]);
-    }
-    
-    // Last resort: stringify but try to extract meaningful content
+    if (Array.isArray(data) && data[0]?.output) return parseWebhookOutput(data[0]);
     const stringified = JSON.stringify(data);
-    
-    // If it looks like a simple wrapper, try to extract
     try {
       const parsed = typeof data === 'object' ? data : JSON.parse(stringified);
       const keys = Object.keys(parsed);
       if (keys.length === 1) {
         const value = parsed[keys[0]];
-        if (typeof value === 'string') {
-          return value;
-        }
+        if (typeof value === 'string') return value;
       }
-    } catch {
-      // Ignore parsing errors
-    }
-    
+    } catch { /* ignore */ }
     return stringified;
   };
 
@@ -272,9 +325,7 @@ export const ResultsDisplay = ({ result, isLoading, inputData }: ResultsDisplayP
     try {
       const response = await fetch('https://tejanaidu7.app.n8n.cloud/webhook/ask-results', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           question: question.trim(),
           results_data: result,
@@ -295,8 +346,6 @@ export const ResultsDisplay = ({ result, isLoading, inputData }: ResultsDisplayP
       });
 
       const data = await response.json();
-      
-      // Parse JSON response using dedicated parser to extract output field
       const parsedOutput = parseWebhookOutput(data);
       setChatResponse(parsedOutput);
     } catch (error) {
@@ -337,20 +386,84 @@ export const ResultsDisplay = ({ result, isLoading, inputData }: ResultsDisplayP
     }
   };
 
-  // Element symbol extraction (first 1-2 letters uppercase)
+  // Element symbol extraction
   const getElementSymbol = (element: string) => {
     const symbol = element.charAt(0).toUpperCase() + (element.charAt(1)?.toLowerCase() || '');
     return symbol;
   };
 
-  // PDF mode classes - disable animations and ensure high visibility
+  // PDF mode classes
   const pdfModeClasses = isPdfMode ? 'pdf-export-mode' : '';
   const cardAnimationClass = isPdfMode ? '' : 'animate-in fade-in-0 slide-in-from-top-4 duration-700';
   const slideAnimationClass = isPdfMode ? '' : 'animate-in fade-in-0 slide-in-from-bottom-4 duration-700';
 
+  // Dynamic heat treatment renderer - renders ALL keys automatically
+  const renderHeatTreatmentField = (key: string, value: any, index: number) => {
+    if (key === 'type') return null; // already shown in header badge
+
+    // Nested object (like tempering_stage)
+    if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+      return (
+        <div key={key} className="p-4 rounded-xl bg-muted/30 border border-border/50" style={{ opacity: 1 }}>
+          <div className="flex items-center gap-2 mb-3">
+            <Zap className="w-4 h-4 text-amber-500" />
+            <p className="text-xs uppercase tracking-wider text-muted-foreground font-medium">{formatKey(key)}</p>
+          </div>
+          <div className="flex flex-wrap gap-4">
+            {Object.entries(value).map(([subKey, subVal]) => (
+              <div key={subKey} className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">{formatKey(subKey)}:</span>
+                {typeof subVal === 'boolean' ? (
+                  <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${subVal ? 'bg-green-500/20 text-green-600' : 'bg-muted text-muted-foreground'}`} style={{ opacity: 1 }}>
+                    {subVal ? "Yes" : "No"}
+                  </span>
+                ) : (
+                  <span className="font-semibold text-foreground">{String(subVal)}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // Color palette for heat treatment fields
+    const colors = [
+      { bg: 'from-orange-500/10 to-orange-500/5', border: 'border-orange-500', icon: 'text-orange-500' },
+      { bg: 'from-amber-500/10 to-amber-500/5', border: 'border-amber-500', icon: 'text-amber-500' },
+      { bg: 'from-red-500/10 to-red-500/5', border: 'border-red-500', icon: 'text-red-500' },
+      { bg: 'from-yellow-500/10 to-yellow-500/5', border: 'border-yellow-500', icon: 'text-yellow-500' },
+    ];
+    const color = colors[index % colors.length];
+    const icons = [Flame, Clock, Shield, Zap];
+    const Icon = icons[index % icons.length];
+
+    return (
+      <div
+        key={key}
+        className={`p-5 rounded-xl bg-gradient-to-br ${color.bg} border-l-4 ${color.border} ${isPdfMode ? '' : 'transition-all duration-300 hover:shadow-lg'}`}
+        style={{ opacity: 1 }}
+      >
+        <div className="flex items-center gap-2 mb-2">
+          <Icon className={`w-4 h-4 ${color.icon}`} />
+          <p className="text-xs uppercase tracking-wider text-muted-foreground font-medium">{formatKey(key)}</p>
+        </div>
+        <p className="text-xl font-bold text-foreground break-words">{String(value)}</p>
+      </div>
+    );
+  };
+
+  // Separate heat treatment fields into grid items and full-width items
+  const htEntries = heatTreatment ? Object.entries(heatTreatment) : [];
+  const htGridFields = htEntries.filter(([k, v]) => k !== 'type' && (typeof v !== 'object' || v === null || Array.isArray(v)));
+  const htFullWidthFields = htEntries.filter(([k, v]) => k !== 'type' && typeof v === 'object' && v !== null && !Array.isArray(v));
+  // String fields that look like descriptions (long text)
+  const htDescFields = htEntries.filter(([k, v]) => k !== 'type' && typeof v === 'string' && String(v).length > 80);
+  const htShortGridFields = htGridFields.filter(([k, v]) => typeof v !== 'string' || String(v).length <= 80);
+
   return (
     <div className={`space-y-8 ${pdfModeClasses}`}>
-      {/* PDF Export Styles - Injected when exporting */}
+      {/* PDF Export Styles */}
       {isPdfMode && (
         <style>{`
           .pdf-export-mode * {
@@ -360,24 +473,12 @@ export const ResultsDisplay = ({ result, isLoading, inputData }: ResultsDisplayP
             transform: none !important;
             animation-delay: 0s !important;
           }
-          .pdf-export-mode .animate-in {
-            animation: none !important;
-          }
-          .pdf-export-mode [class*="fade-in"],
-          .pdf-export-mode [class*="slide-in"],
-          .pdf-export-mode [class*="zoom-in"] {
-            opacity: 1 !important;
-            transform: none !important;
-          }
         `}</style>
       )}
 
       <div ref={reportRef} className="space-y-8 bg-white p-4">
-        {/* ====== SECTION 1: Success Score Progress Bars (TL;DR) ====== */}
-        <div 
-          className={cardAnimationClass}
-          style={isPdfMode ? {} : getAnimationDelay(0, 0)}
-        >
+        {/* ====== SECTION 1: Header & Score Progress Bars ====== */}
+        <div className={cardAnimationClass} style={isPdfMode ? {} : getAnimationDelay(0, 0)}>
           <Card className="shadow-xl border-border/50 overflow-hidden bg-gradient-to-br from-card via-card to-muted/20">
             <CardContent className="pt-6 pb-6">
               <div className="flex items-center justify-between mb-6">
@@ -391,7 +492,6 @@ export const ResultsDisplay = ({ result, isLoading, inputData }: ResultsDisplayP
                   </div>
                 </div>
                 
-                {/* PDF Export Button - Hidden during export */}
                 {!isPdfMode && (
                   <Button 
                     onClick={handleExportPDF}
@@ -405,14 +505,12 @@ export const ResultsDisplay = ({ result, isLoading, inputData }: ResultsDisplayP
                 )}
               </div>
 
-              {/* Success Score Progress Bars - Double-click to expand details */}
+              {/* Success Score Progress Bars */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Probability of Success - Expandable on double-click */}
+                {/* Probability of Success */}
                 {probabilityOfSuccess !== undefined && (
                   <div 
-                    className={`relative space-y-2 p-3 rounded-xl cursor-pointer transition-all duration-300 ${
-                      expandedProbability ? '' : 'hover:bg-primary/5'
-                    }`}
+                    className={`relative space-y-2 p-3 rounded-xl cursor-pointer transition-all duration-300 ${expandedProbability ? '' : 'hover:bg-primary/5'}`}
                     style={{ opacity: 1 }}
                     onDoubleClick={() => setExpandedProbability(true)}
                     title="Double-click for details"
@@ -437,16 +535,10 @@ export const ResultsDisplay = ({ result, isLoading, inputData }: ResultsDisplayP
                       <p className="text-xs text-muted-foreground/60 text-center mt-1">Double-click for details</p>
                     )}
                     
-                    {/* Expanded Details Modal Overlay */}
                     {expandedProbability && (
                       <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm" onClick={() => setExpandedProbability(false)}>
                         <div className="relative max-w-md w-full mx-4 p-6 rounded-2xl bg-card border border-border shadow-2xl" onClick={(e) => e.stopPropagation()}>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="absolute top-3 right-3"
-                            onClick={() => setExpandedProbability(false)}
-                          >
+                          <Button variant="ghost" size="icon" className="absolute top-3 right-3" onClick={() => setExpandedProbability(false)}>
                             <X className="w-5 h-5" />
                           </Button>
                           <div className="flex items-center gap-3 mb-4">
@@ -459,10 +551,7 @@ export const ResultsDisplay = ({ result, isLoading, inputData }: ResultsDisplayP
                             </div>
                           </div>
                           <div className="h-3 bg-muted rounded-full overflow-hidden mb-4">
-                            <div 
-                              className="h-full bg-gradient-to-r from-primary to-accent rounded-full"
-                              style={{ width: `${probabilityOfSuccess * 100}%` }}
-                            />
+                            <div className="h-full bg-gradient-to-r from-primary to-accent rounded-full" style={{ width: `${probabilityOfSuccess * 100}%` }} />
                           </div>
                           <div className="p-4 rounded-xl bg-muted/50 border border-border">
                             <p className="text-sm text-muted-foreground font-medium mb-2">Details & Rationale</p>
@@ -474,12 +563,10 @@ export const ResultsDisplay = ({ result, isLoading, inputData }: ResultsDisplayP
                   </div>
                 )}
 
-                {/* Sustainability Score - Expandable on double-click */}
+                {/* Sustainability Score */}
                 {sustainabilityScore !== undefined && (
                   <div 
-                    className={`relative space-y-2 p-3 rounded-xl cursor-pointer transition-all duration-300 ${
-                      expandedSustainability ? '' : 'hover:bg-green-500/5'
-                    }`}
+                    className={`relative space-y-2 p-3 rounded-xl cursor-pointer transition-all duration-300 ${expandedSustainability ? '' : 'hover:bg-green-500/5'}`}
                     style={{ opacity: 1 }}
                     onDoubleClick={() => setExpandedSustainability(true)}
                     title="Double-click for details"
@@ -504,16 +591,10 @@ export const ResultsDisplay = ({ result, isLoading, inputData }: ResultsDisplayP
                       <p className="text-xs text-muted-foreground/60 text-center mt-1">Double-click for details</p>
                     )}
                     
-                    {/* Expanded Details Modal Overlay */}
                     {expandedSustainability && (
                       <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm" onClick={() => setExpandedSustainability(false)}>
                         <div className="relative max-w-md w-full mx-4 p-6 rounded-2xl bg-card border border-border shadow-2xl" onClick={(e) => e.stopPropagation()}>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="absolute top-3 right-3"
-                            onClick={() => setExpandedSustainability(false)}
-                          >
+                          <Button variant="ghost" size="icon" className="absolute top-3 right-3" onClick={() => setExpandedSustainability(false)}>
                             <X className="w-5 h-5" />
                           </Button>
                           <div className="flex items-center gap-3 mb-4">
@@ -526,10 +607,7 @@ export const ResultsDisplay = ({ result, isLoading, inputData }: ResultsDisplayP
                             </div>
                           </div>
                           <div className="h-3 bg-muted rounded-full overflow-hidden mb-4">
-                            <div 
-                              className="h-full bg-gradient-to-r from-green-400 to-emerald-500 rounded-full"
-                              style={{ width: `${sustainabilityScore * 100}%` }}
-                            />
+                            <div className="h-full bg-gradient-to-r from-green-400 to-emerald-500 rounded-full" style={{ width: `${sustainabilityScore * 100}%` }} />
                           </div>
                           <div className="p-4 rounded-xl bg-muted/50 border border-border">
                             <p className="text-sm text-muted-foreground font-medium mb-2">Details & Environmental Impact</p>
@@ -559,57 +637,48 @@ export const ResultsDisplay = ({ result, isLoading, inputData }: ResultsDisplayP
         </div>
 
         {/* ====== SECTION 2: Periodic Table Composition Grid ====== */}
-        <div 
-          className={slideAnimationClass}
-          style={isPdfMode ? {} : getAnimationDelay(1, 150)}
-        >
-          <Card className="shadow-xl border-border/50 overflow-hidden">
-            <CardHeader className="bg-gradient-to-r from-primary/10 via-primary/5 to-accent/10 border-b border-border/50">
-              <CardTitle className="flex items-center gap-3 text-xl">
-                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center" style={{ opacity: 1 }}>
-                  <Beaker className="w-5 h-5 text-primary" />
-                </div>
-                Redesigned Composition
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-6 pb-6">
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
-                {Object.entries(composition).map(([element, value], index) => (
-                  <div
-                    key={element}
-                    className={`group relative ${isPdfMode ? '' : 'animate-in fade-in-0 zoom-in-95 duration-500'}`}
-                    style={isPdfMode ? { opacity: 1 } : getAnimationDelay(index, 50)}
-                  >
-                    {/* Glass-morphism tile */}
-                    <div className="aspect-square rounded-xl bg-gradient-to-br from-card via-card to-muted/30 border border-border/50 backdrop-blur-sm p-3 flex flex-col items-center justify-center transition-all duration-300 hover:shadow-lg hover:shadow-primary/10 hover:border-primary/30 hover:scale-105 group-hover:bg-gradient-to-br group-hover:from-primary/5 group-hover:to-accent/5" style={{ opacity: 1, zIndex: 10 }}>
-                      {/* Element Symbol - Bold Scientific Font */}
-                      <span className="text-2xl font-bold text-foreground tracking-tight font-mono">
-                        {getElementSymbol(element)}
-                      </span>
-                      {/* Full Name */}
-                      <span className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">
-                        {element}
-                      </span>
-                      {/* Percentage */}
-                      <span className="text-sm font-semibold text-primary mt-1">
-                        {typeof value === 'number' ? value.toFixed(3) : String(value)}%
-                      </span>
-                    </div>
+        {Object.keys(composition).length > 0 && (
+          <div className={slideAnimationClass} style={isPdfMode ? {} : getAnimationDelay(1, 150)}>
+            <Card className="shadow-xl border-border/50 overflow-hidden">
+              <CardHeader className="bg-gradient-to-r from-primary/10 via-primary/5 to-accent/10 border-b border-border/50">
+                <CardTitle className="flex items-center gap-3 text-xl">
+                  <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center" style={{ opacity: 1 }}>
+                    <Beaker className="w-5 h-5 text-primary" />
                   </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+                  Redesigned Composition
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-6 pb-6">
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
+                  {Object.entries(composition).map(([element, value], index) => (
+                    <div
+                      key={element}
+                      className={`group relative ${isPdfMode ? '' : 'animate-in fade-in-0 zoom-in-95 duration-500'}`}
+                      style={isPdfMode ? { opacity: 1 } : getAnimationDelay(index, 50)}
+                    >
+                      <div className="aspect-square rounded-xl bg-gradient-to-br from-card via-card to-muted/30 border border-border/50 backdrop-blur-sm p-3 flex flex-col items-center justify-center transition-all duration-300 hover:shadow-lg hover:shadow-primary/10 hover:border-primary/30 hover:scale-105 group-hover:bg-gradient-to-br group-hover:from-primary/5 group-hover:to-accent/5" style={{ opacity: 1, zIndex: 10 }}>
+                        <span className="text-2xl font-bold text-foreground tracking-tight font-mono">
+                          {getElementSymbol(element)}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">
+                          {element}
+                        </span>
+                        <span className="text-sm font-semibold text-primary mt-1">
+                          {typeof value === 'number' ? value.toFixed(3) : String(value)}%
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
-        {/* ====== SECTION 3: Heat Treatment Vault (Warm Orange Theme) ====== */}
-        {heatTreatment && (
-          <div 
-            className={slideAnimationClass}
-            style={isPdfMode ? {} : getAnimationDelay(2, 150)}
-          >
+        {/* ====== SECTION 3: Heat Treatment Vault (Dynamic) ====== */}
+        {heatTreatment && Object.keys(heatTreatment).length > 0 && (
+          <div className={slideAnimationClass} style={isPdfMode ? {} : getAnimationDelay(2, 150)}>
             <Card className="shadow-xl border-border/50 overflow-hidden relative">
-              {/* Subtle warm glow effect */}
               <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 via-transparent to-red-500/5 pointer-events-none" />
               
               <CardHeader className="bg-gradient-to-r from-orange-500/15 via-orange-500/10 to-amber-500/15 border-b border-orange-500/20 relative">
@@ -619,147 +688,81 @@ export const ResultsDisplay = ({ result, isLoading, inputData }: ResultsDisplayP
                   </div>
                   <div>
                     <span className="text-foreground">Heat Treatment Vault</span>
-                    <span className="ml-3 px-3 py-1 text-sm font-bold rounded-full bg-gradient-to-r from-orange-500 to-amber-500 text-white" style={{ opacity: 1 }}>
-                      {heatTreatment.type}
-                    </span>
+                    {heatTreatment.type && (
+                      <span className="ml-3 px-3 py-1 text-sm font-bold rounded-full bg-gradient-to-r from-orange-500 to-amber-500 text-white" style={{ opacity: 1 }}>
+                        {heatTreatment.type}
+                      </span>
+                    )}
                   </div>
                 </CardTitle>
               </CardHeader>
               
-              <CardContent className="pt-6 pb-6 relative">
-                {/* Primary Heat Treatment Parameters */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                  <div 
-                    className={`p-5 rounded-xl bg-gradient-to-br from-orange-500/10 to-orange-500/5 border-l-4 border-orange-500 ${isPdfMode ? '' : 'transition-all duration-300 hover:shadow-lg hover:shadow-orange-500/10'}`}
-                    style={{ opacity: 1 }}
-                  >
-                    <div className="flex items-center gap-2 mb-2">
-                      <Flame className="w-4 h-4 text-orange-500" />
-                      <p className="text-xs uppercase tracking-wider text-muted-foreground font-medium">Austenitizing Temp</p>
-                    </div>
-                    <p className="text-2xl font-bold text-foreground">{heatTreatment.austenitizing_temp}</p>
-                  </div>
-                  
-                  <div 
-                    className={`p-5 rounded-xl bg-gradient-to-br from-amber-500/10 to-amber-500/5 border-l-4 border-amber-500 ${isPdfMode ? '' : 'transition-all duration-300 hover:shadow-lg hover:shadow-amber-500/10'}`}
-                    style={{ opacity: 1 }}
-                  >
-                    <div className="flex items-center gap-2 mb-2">
-                      <Clock className="w-4 h-4 text-amber-500" />
-                      <p className="text-xs uppercase tracking-wider text-muted-foreground font-medium">Soaking Time</p>
-                    </div>
-                    <p className="text-2xl font-bold text-foreground">{heatTreatment.soaking_time}</p>
-                  </div>
-                  
-                  <div 
-                    className={`p-5 rounded-xl bg-gradient-to-br from-red-500/10 to-red-500/5 border-l-4 border-red-500 ${isPdfMode ? '' : 'transition-all duration-300 hover:shadow-lg hover:shadow-red-500/10'}`}
-                    style={{ opacity: 1 }}
-                  >
-                    <div className="flex items-center gap-2 mb-2">
-                      <Droplets className="w-4 h-4 text-red-500" />
-                      <p className="text-xs uppercase tracking-wider text-muted-foreground font-medium">Quenching</p>
-                    </div>
-                    <div className="flex flex-wrap gap-2 mt-1">
-                      <span className="px-2 py-1 text-sm font-semibold rounded-md bg-red-500/20 text-red-600 dark:text-red-400" style={{ opacity: 1 }}>
-                        {heatTreatment.quenching_medium}
-                      </span>
-                      <span className="px-2 py-1 text-sm font-semibold rounded-md bg-orange-500/20 text-orange-600 dark:text-orange-400" style={{ opacity: 1 }}>
-                        {heatTreatment.cooling_rate}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Tempering Stage */}
-                {heatTreatment.tempering_stage && (
-                  <div className="p-4 rounded-xl bg-muted/30 border border-border/50 mb-4" style={{ opacity: 1 }}>
-                    <div className="flex items-center gap-2 mb-3">
-                      <Zap className="w-4 h-4 text-amber-500" />
-                      <p className="text-xs uppercase tracking-wider text-muted-foreground font-medium">Tempering Stage</p>
-                    </div>
-                    <div className="flex flex-wrap gap-4">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-muted-foreground">Required:</span>
-                        <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${heatTreatment.tempering_stage.required ? 'bg-green-500/20 text-green-600' : 'bg-muted text-muted-foreground'}`} style={{ opacity: 1 }}>
-                          {heatTreatment.tempering_stage.required ? "Yes" : "No"}
-                        </span>
-                      </div>
-                      {heatTreatment.tempering_stage.temp !== "N/A" && (
-                        <>
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm text-muted-foreground">Temp:</span>
-                            <span className="font-semibold text-foreground">{heatTreatment.tempering_stage.temp}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm text-muted-foreground">Time:</span>
-                            <span className="font-semibold text-foreground">{heatTreatment.tempering_stage.time}</span>
-                          </div>
-                        </>
-                      )}
-                    </div>
+              <CardContent className="pt-6 pb-6 relative space-y-4">
+                {/* Grid fields (short values) */}
+                {htShortGridFields.length > 0 && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {htShortGridFields.map(([key, value], index) => renderHeatTreatmentField(key, value, index))}
                   </div>
                 )}
 
-                {/* Predicted Microstructure */}
-                {heatTreatment.predicted_microstructure && (
-                  <div className="p-4 rounded-xl bg-gradient-to-r from-orange-500/10 to-amber-500/10 border border-orange-500/20" style={{ opacity: 1 }}>
+                {/* Full-width nested objects (like tempering_stage) */}
+                {htFullWidthFields.map(([key, value], index) => renderHeatTreatmentField(key, value, index))}
+
+                {/* Long text fields (like predicted_microstructure) */}
+                {htDescFields.map(([key, value]) => (
+                  <div key={key} className="p-4 rounded-xl bg-gradient-to-r from-orange-500/10 to-amber-500/10 border border-orange-500/20" style={{ opacity: 1 }}>
                     <div className="flex items-center gap-2 mb-2">
                       <Shield className="w-4 h-4 text-orange-500" />
-                      <p className="text-xs uppercase tracking-wider text-muted-foreground font-medium">Predicted Microstructure</p>
+                      <p className="text-xs uppercase tracking-wider text-muted-foreground font-medium">{formatKey(key)}</p>
                     </div>
-                    <p className="text-sm leading-relaxed font-medium text-foreground">{heatTreatment.predicted_microstructure}</p>
+                    <p className="text-sm leading-relaxed font-medium text-foreground">{String(value)}</p>
                   </div>
-                )}
+                ))}
               </CardContent>
             </Card>
           </div>
         )}
 
-        {/* ====== SECTION 4: Property Matrix (Cool Blue Theme) ====== */}
-        <div 
-          className={slideAnimationClass}
-          style={isPdfMode ? {} : getAnimationDelay(3, 150)}
-        >
-          <Card className="shadow-xl border-border/50 overflow-hidden relative">
-            {/* Subtle cool glow effect */}
-            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-transparent to-cyan-500/5 pointer-events-none" />
-            
-            <CardHeader className="bg-gradient-to-r from-blue-500/15 via-primary/10 to-cyan-500/15 border-b border-primary/20 relative">
-              <CardTitle className="flex items-center gap-3 text-xl">
-                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-blue-500/25" style={{ opacity: 1 }}>
-                  <Gauge className="w-5 h-5 text-white" />
-                </div>
-                Property Matrix
-              </CardTitle>
-            </CardHeader>
-            
-            <CardContent className="pt-6 pb-6 relative">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {Object.entries(properties).map(([key, value], index) => (
-                  <div
-                    key={key}
-                    className={`p-4 rounded-xl bg-gradient-to-br from-primary/5 to-accent/5 border border-primary/20 ${isPdfMode ? '' : 'transition-all duration-300 hover:shadow-lg hover:shadow-primary/10 hover:border-primary/40'}`}
-                    style={{ opacity: 1, zIndex: 10 }}
-                  >
-                    <p className="text-xs uppercase tracking-wider text-muted-foreground font-medium mb-1">
-                      {key.replace(/_/g, ' ')}
-                    </p>
-                    <p className="text-2xl font-bold text-primary">
-                      {String(value)}
-                    </p>
+        {/* ====== SECTION 4: Property Matrix ====== */}
+        {Object.keys(properties).length > 0 && (
+          <div className={slideAnimationClass} style={isPdfMode ? {} : getAnimationDelay(3, 150)}>
+            <Card className="shadow-xl border-border/50 overflow-hidden relative">
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-transparent to-cyan-500/5 pointer-events-none" />
+              
+              <CardHeader className="bg-gradient-to-r from-blue-500/15 via-primary/10 to-cyan-500/15 border-b border-primary/20 relative">
+                <CardTitle className="flex items-center gap-3 text-xl">
+                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-blue-500/25" style={{ opacity: 1 }}>
+                    <Gauge className="w-5 h-5 text-white" />
                   </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+                  Property Matrix
+                </CardTitle>
+              </CardHeader>
+              
+              <CardContent className="pt-6 pb-6 relative">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {Object.entries(properties).map(([key, value], index) => (
+                    <div
+                      key={key}
+                      className={`p-4 rounded-xl bg-gradient-to-br from-primary/5 to-accent/5 border border-primary/20 ${isPdfMode ? '' : 'transition-all duration-300 hover:shadow-lg hover:shadow-primary/10 hover:border-primary/40'}`}
+                      style={{ opacity: 1, zIndex: 10 }}
+                    >
+                      <p className="text-xs uppercase tracking-wider text-muted-foreground font-medium mb-1">
+                        {formatKey(key)}
+                      </p>
+                      <p className="text-2xl font-bold text-primary">
+                        {String(value)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* ====== SECTION 5: Achieved Improvements ====== */}
         {improvements.length > 0 && (
-          <div 
-            className={slideAnimationClass}
-            style={isPdfMode ? {} : getAnimationDelay(4, 150)}
-          >
+          <div className={slideAnimationClass} style={isPdfMode ? {} : getAnimationDelay(4, 150)}>
             <Card className="shadow-xl border-border/50 overflow-hidden relative">
               <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 via-transparent to-emerald-500/5 pointer-events-none" />
               
@@ -807,12 +810,9 @@ export const ResultsDisplay = ({ result, isLoading, inputData }: ResultsDisplayP
           </div>
         )}
 
-        {/* ====== SECTION 6: Analysis Insights Card ====== */}
+        {/* ====== SECTION 6: Analysis Insights ====== */}
         {summary && Object.keys(summary).length > 0 && (
-          <div 
-            className={slideAnimationClass}
-            style={isPdfMode ? {} : getAnimationDelay(5, 150)}
-          >
+          <div className={slideAnimationClass} style={isPdfMode ? {} : getAnimationDelay(5, 150)}>
             <Card className="shadow-xl border-border/50 overflow-hidden">
               <CardHeader className="bg-gradient-to-r from-primary/10 via-primary/5 to-accent/10 border-b border-border/50">
                 <CardTitle className="flex items-center gap-3 text-xl">
@@ -862,7 +862,7 @@ export const ResultsDisplay = ({ result, isLoading, inputData }: ResultsDisplayP
 
                 {/* Expert Remarks */}
                 {summary.remarks && (
-                  <div className="p-6 rounded-xl bg-muted/30 border border-border/50" style={{ opacity: 1, zIndex: 10 }}>
+                  <div className="p-6 rounded-xl bg-muted/30 border border-border/50 mb-4" style={{ opacity: 1, zIndex: 10 }}>
                     <div className="flex items-center gap-2 mb-4">
                       <Microscope className="w-5 h-5 text-primary" />
                       <p className="text-sm uppercase tracking-wider text-muted-foreground font-semibold">Expert Analysis</p>
@@ -872,83 +872,127 @@ export const ResultsDisplay = ({ result, isLoading, inputData }: ResultsDisplayP
                     </p>
                   </div>
                 )}
+
+                {/* Any other summary fields rendered dynamically */}
+                {(() => {
+                  const knownSummaryKeys = new Set(['performance_gain_percent', 'cost_change_percent', 'environmental_impact_change', 'remarks', 'probability_explanation', 'sustainability_explanation']);
+                  const extraSummaryFields = Object.entries(summary).filter(([k]) => !knownSummaryKeys.has(k));
+                  if (extraSummaryFields.length === 0) return null;
+                  return (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                      {extraSummaryFields.map(([key, value]) => (
+                        <div key={key} className="p-4 rounded-xl bg-muted/20 border border-border/50">
+                          <p className="text-xs uppercase tracking-wider text-muted-foreground font-medium mb-2">{formatKey(key)}</p>
+                          {typeof value === 'object' && value !== null ? (
+                            <DynamicValue value={value} />
+                          ) : (
+                            <p className="text-sm leading-relaxed text-foreground">{String(value)}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
               </CardContent>
             </Card>
           </div>
         )}
 
-        {/* ====== SECTION 7: Additional Dynamic Data ====== */}
+        {/* ====== SECTION 7: Ashby & TTT Data Tables (when no chart component handles them) ====== */}
+        {ashbyData.length > 0 && (
+          <div className={slideAnimationClass} style={isPdfMode ? {} : getAnimationDelay(6, 150)}>
+            <Card className="shadow-xl border-border/50 overflow-hidden">
+              <CardHeader className="bg-gradient-to-r from-indigo-500/15 via-indigo-500/10 to-violet-500/15 border-b border-indigo-500/20">
+                <CardTitle className="flex items-center gap-3 text-xl">
+                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center shadow-lg shadow-indigo-500/25" style={{ opacity: 1 }}>
+                    <Database className="w-5 h-5 text-white" />
+                  </div>
+                  Ashby Plot Data
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-6 pb-6">
+                <DynamicValue value={ashbyData} />
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {tttCurveData.length > 0 && (
+          <div className={slideAnimationClass} style={isPdfMode ? {} : getAnimationDelay(7, 150)}>
+            <Card className="shadow-xl border-border/50 overflow-hidden">
+              <CardHeader className="bg-gradient-to-r from-teal-500/15 via-teal-500/10 to-cyan-500/15 border-b border-teal-500/20">
+                <CardTitle className="flex items-center gap-3 text-xl">
+                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-teal-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-teal-500/25" style={{ opacity: 1 }}>
+                    <Activity className="w-5 h-5 text-white" />
+                  </div>
+                  TTT Curve Data
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-6 pb-6">
+                <DynamicValue value={tttCurveData} />
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {coolingPathData.length > 0 && (
+          <div className={slideAnimationClass} style={isPdfMode ? {} : getAnimationDelay(8, 150)}>
+            <Card className="shadow-xl border-border/50 overflow-hidden">
+              <CardHeader className="bg-gradient-to-r from-sky-500/15 via-sky-500/10 to-blue-500/15 border-b border-sky-500/20">
+                <CardTitle className="flex items-center gap-3 text-xl">
+                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-sky-500 to-blue-500 flex items-center justify-center shadow-lg shadow-sky-500/25" style={{ opacity: 1 }}>
+                    <TrendingUp className="w-5 h-5 text-white" />
+                  </div>
+                  Cooling Path Data
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-6 pb-6">
+                <DynamicValue value={coolingPathData} />
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* ====== SECTION 8: Additional Dynamic Data ====== */}
         {additionalFields.length > 0 && (
-          <div 
-            className={slideAnimationClass}
-            style={isPdfMode ? {} : getAnimationDelay(6, 150)}
-          >
+          <div className={slideAnimationClass} style={isPdfMode ? {} : getAnimationDelay(9, 150)}>
             <Card className="shadow-xl border-border/50 overflow-hidden">
               <CardHeader className="bg-gradient-to-r from-violet-500/15 via-violet-500/10 to-purple-500/15 border-b border-violet-500/20">
                 <CardTitle className="flex items-center gap-3 text-xl">
                   <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-violet-500 to-purple-500 flex items-center justify-center shadow-lg shadow-violet-500/25" style={{ opacity: 1 }}>
-                    <Activity className="w-5 h-5 text-white" />
+                    <List className="w-5 h-5 text-white" />
                   </div>
                   Additional Analysis Data
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-6 pb-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {additionalFields.map(([key, value], index) => {
-                    const formattedKey = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-                    
-                    // Handle different value types
-                    if (typeof value === 'object' && value !== null) {
-                      return (
-                        <div 
-                          key={key}
-                          className={`p-4 rounded-xl bg-violet-500/5 border border-violet-500/20 col-span-full ${isPdfMode ? '' : 'animate-in fade-in-0 duration-500'}`}
-                          style={isPdfMode ? {} : { animationDelay: `${index * 100}ms` }}
-                        >
-                          <p className="text-xs uppercase tracking-wider text-muted-foreground font-medium mb-2">
-                            {formattedKey}
-                          </p>
-                          <pre className="text-sm text-foreground bg-muted/30 p-3 rounded-lg overflow-x-auto whitespace-pre-wrap">
-                            {JSON.stringify(value, null, 2)}
-                          </pre>
-                        </div>
-                      );
-                    }
-                    
-                    return (
-                      <div 
-                        key={key}
-                        className={`p-4 rounded-xl bg-violet-500/5 border border-violet-500/20 ${isPdfMode ? '' : 'animate-in fade-in-0 duration-500'}`}
-                        style={isPdfMode ? {} : { animationDelay: `${index * 100}ms` }}
-                      >
-                        <p className="text-xs uppercase tracking-wider text-muted-foreground font-medium mb-1">
-                          {formattedKey}
-                        </p>
-                        <p className="text-lg font-semibold text-foreground">
-                          {String(value)}
-                        </p>
-                      </div>
-                    );
-                  })}
+                <div className="space-y-4">
+                  {additionalFields.map(([key, value], index) => (
+                    <div 
+                      key={key}
+                      className={`p-4 rounded-xl bg-violet-500/5 border border-violet-500/20 ${isPdfMode ? '' : 'animate-in fade-in-0 duration-500'}`}
+                      style={isPdfMode ? {} : { animationDelay: `${index * 100}ms` }}
+                    >
+                      <p className="text-xs uppercase tracking-wider text-muted-foreground font-medium mb-2">
+                        {formatKey(key)}
+                      </p>
+                      <DynamicValue value={parseIfString(value)} />
+                    </div>
+                  ))}
                 </div>
               </CardContent>
             </Card>
           </div>
         )}
 
-        {/* ====== SECTION 8: Interactive Charts (Ashby & TTT) ====== */}
-        <div 
-          className={slideAnimationClass}
-          style={isPdfMode ? {} : getAnimationDelay(7, 150)}
-          id="property-analysis-charts"
-        >
+        {/* ====== SECTION 9: Interactive Charts (Ashby & TTT) ====== */}
+        <div className={slideAnimationClass} style={isPdfMode ? {} : getAnimationDelay(10, 150)} id="property-analysis-charts">
           <PropertyAnalysis result={result} inputData={inputData} />
         </div>
       </div>
 
-      {/* ====== SECTION 9: Sources & References ====== */}
+      {/* ====== SECTION 10: Sources & References ====== */}
       {(() => {
-        // Extract sources from various possible locations in the response
         const sources = alloy?.sources || alloy?.references || alloy?.source_links || 
                        apiData?.sources || apiData?.references || apiData?.source_links ||
                        result?.sources || result?.references || [];
@@ -957,10 +1001,7 @@ export const ResultsDisplay = ({ result, isLoading, inputData }: ResultsDisplayP
         if (sourceArray.length === 0) return null;
         
         return (
-          <div 
-            className="animate-in fade-in-0 slide-in-from-bottom-4 duration-700 mt-8"
-            style={getAnimationDelay(8, 150)}
-          >
+          <div className="animate-in fade-in-0 slide-in-from-bottom-4 duration-700 mt-8" style={getAnimationDelay(11, 150)}>
             <Card className="shadow-xl border-border/50 overflow-hidden relative">
               <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-transparent to-cyan-500/5 pointer-events-none" />
               
@@ -982,12 +1023,8 @@ export const ResultsDisplay = ({ result, isLoading, inputData }: ResultsDisplayP
                       : source?.title || source?.name || source?.label || `Source ${index + 1}`;
                     
                     if (!url) {
-                      // If no URL, just display as text
                       return (
-                        <span
-                          key={index}
-                          className="inline-flex items-center gap-2 px-4 py-2 text-sm rounded-full bg-muted/50 text-muted-foreground border border-border/50"
-                        >
+                        <span key={index} className="inline-flex items-center gap-2 px-4 py-2 text-sm rounded-full bg-muted/50 text-muted-foreground border border-border/50">
                           <ExternalLink className="w-3.5 h-3.5" />
                           {typeof source === 'string' ? source : JSON.stringify(source)}
                         </span>
@@ -995,20 +1032,14 @@ export const ResultsDisplay = ({ result, isLoading, inputData }: ResultsDisplayP
                     }
                     
                     return (
-                      <a
-                        key={index}
-                        href={url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-2 px-4 py-2 text-sm rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 transition-all duration-300 border border-blue-500/20 hover:border-blue-500/40 hover:shadow-lg hover:shadow-blue-500/10 group"
-                      >
+                      <a key={index} href={url} target="_blank" rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 px-4 py-2 text-sm rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 transition-all duration-300 border border-blue-500/20 hover:border-blue-500/40 hover:shadow-lg hover:shadow-blue-500/10 group">
                         <ExternalLink className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
                         <span className="font-medium">{title}</span>
                       </a>
                     );
                   })}
                 </div>
-                
                 <p className="text-xs text-muted-foreground/60 mt-4">
                   These references were used in the metallurgical analysis. Click to open in a new tab.
                 </p>
@@ -1018,13 +1049,9 @@ export const ResultsDisplay = ({ result, isLoading, inputData }: ResultsDisplayP
         );
       })()}
 
-      {/* ====== SECTION 10: Ask a Question Chat Box ====== */}
-      <div 
-        className="animate-in fade-in-0 slide-in-from-bottom-4 duration-700 mt-8"
-        style={getAnimationDelay(9, 150)}
-      >
+      {/* ====== SECTION 11: Ask a Question Chat Box ====== */}
+      <div className="animate-in fade-in-0 slide-in-from-bottom-4 duration-700 mt-8" style={getAnimationDelay(12, 150)}>
         <Card className="shadow-xl border-border/50 overflow-hidden relative">
-          {/* Glowing background effect */}
           <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-accent/5 pointer-events-none" />
           
           <CardHeader className="bg-gradient-to-r from-primary/10 via-primary/5 to-accent/10 border-b border-border/50 relative">
@@ -1042,19 +1069,15 @@ export const ResultsDisplay = ({ result, isLoading, inputData }: ResultsDisplayP
               <div className="mb-6 p-6 rounded-xl bg-muted/30 border border-border/50 animate-in fade-in-0 slide-in-from-top-4 duration-500">
                 {isAskingQuestion ? (
                   <div className="flex flex-col items-center justify-center py-8 space-y-6">
-                    {/* Animated Timer */}
                     <div className="relative">
                       <div className="w-16 h-16 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
                       <Loader2 className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6 text-primary animate-pulse" />
                     </div>
-                    
-                    {/* Metallurgy Quote */}
                     <div className="text-center max-w-md animate-in fade-in-0 duration-500">
                       <p className="text-sm italic text-muted-foreground leading-relaxed">
                         {metallurgyQuotes[currentQuote]}
                       </p>
                     </div>
-                    
                     <p className="text-xs text-muted-foreground/70 uppercase tracking-wider">
                       Analyzing your question...
                     </p>
@@ -1089,14 +1112,12 @@ export const ResultsDisplay = ({ result, isLoading, inputData }: ResultsDisplayP
                 disabled={isAskingQuestion}
               />
               
-              {/* Glowing Animated Ask Button */}
               <div className="flex justify-center">
                 <Button
                   onClick={handleAskQuestion}
                   disabled={!question.trim() || isAskingQuestion}
                   className="relative group px-8 py-6 text-lg font-semibold rounded-xl bg-gradient-to-r from-primary to-accent text-primary-foreground shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/40 transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                 >
-                  {/* Glowing animation ring */}
                   <span className="absolute inset-0 rounded-xl bg-gradient-to-r from-primary to-accent opacity-0 group-hover:opacity-100 blur-xl transition-opacity duration-500" />
                   <span className="absolute inset-0 rounded-xl animate-glow opacity-50" />
                   
