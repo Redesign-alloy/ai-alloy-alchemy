@@ -43,7 +43,7 @@ const handleSubmit = async (data: AlloyData) => {
     };
 
     const response = await fetch(
-      "https://tejanaidu9.app.n8n.cloud/webhook/redesign-alloy",
+      "https://tejanaidu9.app.n8n.cloud/webhook/redesign_alloy",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
